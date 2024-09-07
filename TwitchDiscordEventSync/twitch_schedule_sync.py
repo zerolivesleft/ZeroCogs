@@ -15,10 +15,15 @@ class TwitchScheduleSync(commands.Cog):
             "twitch_username": None
         }
         self.config.register_global(**default_global)
+        self.twitch_client_id = None
+        self.twitch_client_secret = None
+        self.twitch_username = None
+        self.sync_schedule.start()
+
+    async def initialize(self):
         self.twitch_client_id = await self.config.twitch_client_id()
         self.twitch_client_secret = await self.config.twitch_client_secret()
         self.twitch_username = await self.config.twitch_username()
-        self.sync_schedule.start()
 
     def cog_unload(self):
         self.sync_schedule.cancel()
@@ -128,14 +133,6 @@ class TwitchScheduleSync(commands.Cog):
         await ctx.send(f"```\n{settings}\n```")
 
 async def setup(bot):
-    await bot.add_cog(TwitchScheduleSync(bot))
-    @twitchsync.command()
-    @commands.is_owner()
-    async def forcesync(self, ctx):
-        """Force a sync of the Twitch schedule to Discord events"""
-        await ctx.send("Starting Twitch schedule sync...")
-        try:
-            await self.sync_schedule()
-            await ctx.send("Twitch schedule sync completed successfully.")
-        except Exception as e:
-            await ctx.send(f"An error occurred during sync: {str(e)}")
+    cog = TwitchScheduleSync(bot)
+    await cog.initialize()
+    await bot.add_cog(cog)
