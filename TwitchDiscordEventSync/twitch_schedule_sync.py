@@ -120,6 +120,7 @@ class TwitchScheduleSync(commands.Cog):
                     description=segment["category"]["name"],
                     start_time=start_time,
                     end_time=end_time,
+                    privacy_level=discord.PrivacyLevel.guild_only,
                     entity_type=discord.EntityType.external,
                     location=f"https://twitch.tv/{self.twitch_username}"
                 )
