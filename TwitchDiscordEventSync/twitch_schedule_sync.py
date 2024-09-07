@@ -107,6 +107,23 @@ class TwitchScheduleSync(commands.Cog):
         await self.sync_schedule()
         await ctx.send("Twitch schedule sync completed.")
 
+    @commands.command()
+    @commands.is_owner()
+    async def show_twitch_settings(self, ctx):
+        """Display current Twitch API settings."""
+        client_id = await self.config.twitch_client_id()
+        client_secret = await self.config.twitch_client_secret()
+        username = await self.config.twitch_username()
+
+        masked_secret = "****" + client_secret[-4:] if client_secret else None
+
+        settings = (
+            f"Twitch Client ID: {client_id or 'Not set'}\n"
+            f"Twitch Client Secret: {masked_secret or 'Not set'}\n"
+            f"Twitch Username: {username or 'Not set'}"
+        )
+        await ctx.send(f"```\n{settings}\n```")
+
 async def setup(bot):
     await bot.add_cog(TwitchScheduleSync(bot))
     @twitchsync.command()
