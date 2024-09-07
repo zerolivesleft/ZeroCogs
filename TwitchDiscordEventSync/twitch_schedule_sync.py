@@ -5,6 +5,7 @@ import aiohttp
 import os
 from datetime import datetime, timedelta, timezone
 import logging
+import io
 
 class TwitchScheduleSync(commands.Cog):
     def __init__(self, bot):
@@ -136,7 +137,22 @@ class TwitchScheduleSync(commands.Cog):
 
             # Image selection
             image_url = self.get_event_image_url(segment)
+            self.logger.info(f"Image URL for event: {image_url}")
             image = await self.fetch_image(image_url) if image_url else None
+
+    async def fetch_image(self, url):
+        if not url:
+            return None
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        data = await resp.read()
+                        return discord.File(io.BytesIO(data), filename="event_image.png")
+            self.logger.warning(f"Failed to fetch image from URL: {url}")
+        except Exception as e:
+            self.logger.error(f"Error fetching image: {str(e)}")
+        return None
 
     def get_event_image_url(self, segment):
         # Default to category box art
