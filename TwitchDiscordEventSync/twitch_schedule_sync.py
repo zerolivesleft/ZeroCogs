@@ -18,6 +18,7 @@ class TwitchScheduleSync(commands.Cog):
         self.twitch_client_id = None
         self.twitch_client_secret = None
         self.twitch_username = None
+        bot.loop.create_task(self.initialize())
         self.sync_schedule.start()
 
     async def initialize(self):
@@ -65,11 +66,12 @@ class TwitchScheduleSync(commands.Cog):
         return None
 
     async def fetch_twitch_schedule(self, access_token):
-        username = self.twitch_username
-        client_id = self.twitch_client_id
-        url = f"https://api.twitch.tv/helix/schedule?broadcaster_id={username}"
+        user_id = await self.get_twitch_user_id(access_token)
+        if not user_id:
+            return None
+        url = f"https://api.twitch.tv/helix/schedule?broadcaster_id={user_id}"
         headers = {
-            "Client-ID": client_id,
+            "Client-ID": self.twitch_client_id,
             "Authorization": f"Bearer {access_token}"
         }
         async with aiohttp.ClientSession() as session:
@@ -79,10 +81,27 @@ class TwitchScheduleSync(commands.Cog):
                     return data
         return None
 
+    async def get_twitch_user_id(self, access_token):
+        url = f"https://api.twitch.tv/helix/users?login={self.twitch_username}"
+        headers = {
+            "Client-ID": self.twitch_client_id,
+            "Authorization": f"Bearer {access_token}"
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data["data"]:
+                        return data["data"][0]["id"]
+        return None
+
     async def sync_discord_events(self, schedule):
         guild = self.bot.guilds[0]  # Assuming the bot is in only one guild
+        if "data" not in schedule or "segments" not in schedule["data"]:
+            print("No segments found in the schedule")
+            return
         for segment in schedule["data"]["segments"]:
-            start_time = datetime.fromisoformat(segment["start_time"])
+            start_time = datetime.fromisoformat(segment["start_time"].rstrip('Z'))
             end_time = start_time + timedelta(hours=2)  # Assuming 2-hour events
             event_name = f"Twitch Stream: {segment['title']}"
 
@@ -131,6 +150,33 @@ class TwitchScheduleSync(commands.Cog):
             f"Twitch Username: {username or 'Not set'}"
         )
         await ctx.send(f"```\n{settings}\n```")
+
+    @commands.group()
+    @commands.is_owner()
+    async def twitchset(self, ctx):
+        """Configure Twitch API settings."""
+        pass
+
+    @twitchset.command()
+    async def clientid(self, ctx, *, client_id: str):
+        """Set the Twitch Client ID."""
+        await self.config.twitch_client_id.set(client_id)
+        await ctx.send("Twitch Client ID set.")
+        await self.initialize()
+
+    @twitchset.command()
+    async def clientsecret(self, ctx, *, client_secret: str):
+        """Set the Twitch Client Secret."""
+        await self.config.twitch_client_secret.set(client_secret)
+        await ctx.send("Twitch Client Secret set.")
+        await self.initialize()
+
+    @twitchset.command()
+    async def username(self, ctx, *, username: str):
+        """Set the Twitch Username."""
+        await self.config.twitch_username.set(username)
+        await ctx.send("Twitch Username set.")
+        await self.initialize()
 
 async def setup(bot):
     cog = TwitchScheduleSync(bot)
