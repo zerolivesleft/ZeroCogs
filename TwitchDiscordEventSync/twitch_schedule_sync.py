@@ -15,9 +15,9 @@ class TwitchScheduleSync(commands.Cog):
             "twitch_username": None
         }
         self.config.register_global(**default_global)
-        self.twitch_client_id = self.config.get_global("twitch_client_id")
-        self.twitch_client_secret = self.config.get_global("twitch_client_secret")
-        self.twitch_username = self.config.get_global("twitch_username")
+        self.twitch_client_id = await self.config.twitch_client_id()
+        self.twitch_client_secret = await self.config.twitch_client_secret()
+        self.twitch_username = await self.config.twitch_username()
         self.sync_schedule.start()
 
     def cog_unload(self):
@@ -43,13 +43,15 @@ class TwitchScheduleSync(commands.Cog):
 
     async def get_twitch_access_token(self):
         url = "https://id.twitch.tv/oauth2/token"
-        client_id = await self.config.twitch_client_id()
-        client_secret = await self.config.twitch_client_secret()
         params = {
-            "client_id": client_id,
-            "client_secret": client_secret,
+            "client_id": self.twitch_client_id,
+            "client_secret": self.twitch_client_secret,
             "grant_type": "client_credentials"
         }
+        
+        # Filter out None values from params
+        params = {k: v for k, v in params.items() if v is not None}
+
         async with aiohttp.ClientSession() as session:
             async with session.post(url, params=params) as resp:
                 if resp.status == 200:
@@ -58,8 +60,8 @@ class TwitchScheduleSync(commands.Cog):
         return None
 
     async def fetch_twitch_schedule(self, access_token):
-        username = await self.config.twitch_username()
-        client_id = await self.config.twitch_client_id()
+        username = self.twitch_username
+        client_id = self.twitch_client_id
         url = f"https://api.twitch.tv/helix/schedule?broadcaster_id={username}"
         headers = {
             "Client-ID": client_id,
@@ -68,7 +70,8 @@ class TwitchScheduleSync(commands.Cog):
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
-                    return await resp.json()
+                    data = await resp.json()
+                    return data
         return None
 
     async def sync_discord_events(self, schedule):
