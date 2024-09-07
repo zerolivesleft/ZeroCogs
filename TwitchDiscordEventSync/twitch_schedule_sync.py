@@ -102,7 +102,13 @@ class TwitchScheduleSync(commands.Cog):
             return
         for segment in schedule["data"]["segments"]:
             start_time = datetime.fromisoformat(segment["start_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
-            end_time = start_time + timedelta(hours=2)  # Assuming 2-hour events
+            
+            # Check if end_time is provided, otherwise default to 4 hours
+            if "end_time" in segment and segment["end_time"]:
+                end_time = datetime.fromisoformat(segment["end_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
+            else:
+                end_time = start_time + timedelta(hours=4)
+            
             event_name = f"Twitch Stream: {segment['title']}"
 
             # Check if event already exists
