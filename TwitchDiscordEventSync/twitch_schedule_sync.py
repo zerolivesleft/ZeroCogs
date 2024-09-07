@@ -142,16 +142,19 @@ class TwitchScheduleSync(commands.Cog):
 
     async def fetch_image(self, url):
         if not url:
+            self.logger.warning("No URL provided for image fetch")
             return None
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as resp:
                     if resp.status == 200:
                         data = await resp.read()
+                        self.logger.info(f"Successfully fetched image from {url}")
                         return discord.File(io.BytesIO(data), filename="event_image.png")
-            self.logger.warning(f"Failed to fetch image from URL: {url}")
+                    else:
+                        self.logger.warning(f"Failed to fetch image from {url}. Status: {resp.status}")
         except Exception as e:
-            self.logger.error(f"Error fetching image: {str(e)}")
+            self.logger.error(f"Error fetching image from {url}: {str(e)}")
         return None
 
     def get_event_image_url(self, segment):
@@ -163,14 +166,14 @@ class TwitchScheduleSync(commands.Cog):
             image_url = image_url.replace("{width}x{height}", "285x380")
         else:
             # Fallback image if no category image is available
-            image_url = "https://path.to/your/fallback/image.png"
+            image_url = "https://static-cdn.jtvnw.net/jtv_user_pictures/8a6381c7-d0c0-4576-b179-38bd5ce1d6af-profile_image-300x300.png"
 
         # You can add more custom logic here, e.g., based on game name or stream title
         game_name = segment.get("category", {}).get("name", "").lower()
         if "minecraft" in game_name:
-            image_url = "https://path.to/your/minecraft/image.png"
+            image_url = "https://static-cdn.jtvnw.net/ttv-boxart/27471_IGDB-285x380.jpg"
         elif "fortnite" in game_name:
-            image_url = "https://path.to/your/fortnite/image.png"
+            image_url = "https://static-cdn.jtvnw.net/ttv-boxart/33214-285x380.jpg"
 
         return image_url
 
