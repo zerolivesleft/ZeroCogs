@@ -6,6 +6,7 @@ import os
 from datetime import datetime, timedelta, timezone
 import logging
 import io
+import urllib.parse
 
 class TwitchScheduleSync(commands.Cog):
     def __init__(self, bot):
@@ -105,6 +106,7 @@ class TwitchScheduleSync(commands.Cog):
             return
         for segment in schedule["data"]["segments"]:
             self.logger.info(f"Processing segment: {segment}")
+            self.logger.info(f"Category data: {segment.get('category', {})}")
             
             start_time = datetime.fromisoformat(segment["start_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
             
