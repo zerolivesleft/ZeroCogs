@@ -9,6 +9,35 @@ import io
 import urllib.parse
 
 class TwitchScheduleSync(commands.Cog):
+    """
+    Synchronize Twitch stream schedules with Discord events.
+
+    This cog automatically fetches the Twitch schedule for a specified user and creates or updates
+    corresponding Discord events. It runs hourly and can also be triggered manually.
+
+    Setup Instructions:
+    1. Obtain Twitch API credentials:
+       - Go to https://dev.twitch.tv/console/apps
+       - Create a new application or use an existing one
+       - Note down the Client ID and generate a new Client Secret
+
+    2. Set up the cog:
+       - Use `[p]twitchset clientid <your_client_id>` to set the Twitch Client ID
+       - Use `[p]twitchset clientsecret <your_client_secret>` to set the Twitch Client Secret
+       - Use `[p]twitchset username <twitch_username>` to set the Twitch username to track
+
+    3. Verify settings:
+       - Use `[p]show_twitch_settings` to confirm your settings are correct
+
+    4. Force a sync:
+       - Use `[p]force_sync` to manually trigger a sync and verify it's working
+
+    The cog will automatically sync every hour. Events in Discord will be created or updated
+    to match the Twitch schedule, including stream title, category, start time, and thumbnail image.
+
+    Note: This cog requires the bot to have the 'Manage Events' permission in your Discord server.
+    """
+
     def __init__(self, bot):
         self.bot = bot
         self.logger = logging.getLogger("red.TwitchScheduleSync")
