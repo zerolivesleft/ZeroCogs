@@ -172,23 +172,24 @@ class TwitchScheduleSync(commands.Cog):
         return None
 
     def get_event_image_url(self, segment):
-        # Default to category box art
-        image_url = segment.get("category", {}).get("box_art_url", "")
+        category = segment.get("category", {})
+        game_name = category.get("name", "").lower()
+        game_id = category.get("id", "")
 
-        if image_url:
-            # Replace width and height placeholders with desired dimensions
-            image_url = image_url.replace("{width}x{height}", "285x380")
+        # Try to construct the box art URL using the game ID
+        if game_id:
+            image_url = f"https://static-cdn.jtvnw.net/ttv-boxart/{game_id}-285x380.jpg"
         else:
-            # Fallback image if no category image is available
+            # Fallback image if no game ID is available
             image_url = "https://static-cdn.jtvnw.net/jtv_user_pictures/8a6381c7-d0c0-4576-b179-38bd5ce1d6af-profile_image-300x300.png"
 
-        # You can add more custom logic here, e.g., based on game name or stream title
-        game_name = segment.get("category", {}).get("name", "").lower()
+        # You can keep custom logic for specific games if needed
         if "minecraft" in game_name:
             image_url = "https://static-cdn.jtvnw.net/ttv-boxart/27471_IGDB-285x380.jpg"
         elif "fortnite" in game_name:
             image_url = "https://static-cdn.jtvnw.net/ttv-boxart/33214-285x380.jpg"
 
+        self.logger.info(f"Selected image URL for {game_name}: {image_url}")
         return image_url
 
     @sync_schedule.before_loop
