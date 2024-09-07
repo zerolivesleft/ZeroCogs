@@ -33,7 +33,7 @@ class TwitchScheduleSync(commands.Cog):
     def cog_unload(self):
         self.sync_schedule.cancel()
 
-    @tasks.loop(hours=24)
+    @tasks.loop(hours=1)
     async def sync_schedule(self):
         await self._do_sync()
 
