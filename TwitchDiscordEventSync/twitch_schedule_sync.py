@@ -4,10 +4,12 @@ from discord.ext import tasks
 import aiohttp
 import os
 from datetime import datetime, timedelta, timezone
+import logging
 
 class TwitchScheduleSync(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.logger = logging.getLogger("red.TwitchScheduleSync")
         self.config = Config.get_conf(self, identifier=5599887514)  # Use a unique identifier
         default_global = {
             "twitch_client_id": None,
@@ -98,9 +100,10 @@ class TwitchScheduleSync(commands.Cog):
     async def sync_discord_events(self, schedule):
         guild = self.bot.guilds[0]  # Assuming the bot is in only one guild
         if "data" not in schedule or "segments" not in schedule["data"]:
-            print("No segments found in the schedule")
+            self.logger.info("No segments found in the schedule")
             return
         for segment in schedule["data"]["segments"]:
+            self.logger.info(f"Processing segment: {segment}")
             start_time = datetime.fromisoformat(segment["start_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
             
             # Check if end_time is provided, otherwise default to 4 hours
@@ -130,6 +133,30 @@ class TwitchScheduleSync(commands.Cog):
                     entity_type=discord.EntityType.external,
                     location=f"https://twitch.tv/{self.twitch_username}"
                 )
+
+            # Image selection
+            image_url = self.get_event_image_url(segment)
+            image = await self.fetch_image(image_url) if image_url else None
+
+    def get_event_image_url(self, segment):
+        # Default to category box art
+        image_url = segment.get("category", {}).get("box_art_url", "")
+
+        if image_url:
+            # Replace width and height placeholders with desired dimensions
+            image_url = image_url.replace("{width}x{height}", "285x380")
+        else:
+            # Fallback image if no category image is available
+            image_url = "https://path.to/your/fallback/image.png"
+
+        # You can add more custom logic here, e.g., based on game name or stream title
+        game_name = segment.get("category", {}).get("name", "").lower()
+        if "minecraft" in game_name:
+            image_url = "https://path.to/your/minecraft/image.png"
+        elif "fortnite" in game_name:
+            image_url = "https://path.to/your/fortnite/image.png"
+
+        return image_url
 
     @sync_schedule.before_loop
     async def before_sync_schedule(self):
