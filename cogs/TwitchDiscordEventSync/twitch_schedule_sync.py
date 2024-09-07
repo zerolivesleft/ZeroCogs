@@ -119,6 +119,3 @@ async def setup(bot):
             await ctx.send("Twitch schedule sync completed successfully.")
         except Exception as e:
             await ctx.send(f"An error occurred during sync: {str(e)}")
-
-async def setup(bot):
-    await bot.add_cog(TwitchScheduleSync(bot))

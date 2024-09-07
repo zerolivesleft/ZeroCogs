@@ -1,0 +1,20 @@
+{
+    "author": ["Zero"],
+    "install_msg": "Thank you for installing Zero's RedBot Cogs! To get started, check out the README for installation instructions.",
+    "name": "ZerosCogs",
+    "short": "Custom cogs for Red-DiscordBot by Zero",
+    "description": "A collection of custom cogs for Red-DiscordBot, including TwitchScheduleSync.",
+    "tags": [
+        "twitch",
+        "schedule",
+        "sync",
+        "discord",
+        "events"
+    ],
+    "min_bot_version": "3.5.0",
+    "max_bot_version": "3.5.99",
+    "min_python_version": [3, 8, 0],
+    "hidden": false,
+    "disabled": false,
+    "type": "COG"
+}
