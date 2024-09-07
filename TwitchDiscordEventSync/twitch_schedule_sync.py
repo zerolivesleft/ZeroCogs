@@ -3,7 +3,7 @@ import discord
 from discord.ext import tasks
 import aiohttp
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 class TwitchScheduleSync(commands.Cog):
     def __init__(self, bot):
@@ -101,7 +101,7 @@ class TwitchScheduleSync(commands.Cog):
             print("No segments found in the schedule")
             return
         for segment in schedule["data"]["segments"]:
-            start_time = datetime.fromisoformat(segment["start_time"].rstrip('Z'))
+            start_time = datetime.fromisoformat(segment["start_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
             end_time = start_time + timedelta(hours=2)  # Assuming 2-hour events
             event_name = f"Twitch Stream: {segment['title']}"
 
