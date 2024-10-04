@@ -149,14 +149,21 @@ class URLGrabber(commands.Cog):
         if last_message_id:
             kwargs['after'] = discord.Object(id=int(last_message_id))
         
+        message_count = 0
         async for message in channel.history(limit=None, oldest_first=True, **kwargs):
+            message_count += 1
+            self.logger.info(f"Checking message {message.id} from {message.author.name}")
             urls = re.findall(r'(https://open\.spotify\.com/track/[^\s]+)', message.content)
-            for url in urls:
-                track_id = self.sanitize_spotify_url(url)
-                if track_id:
-                    url_dict[message.author.name].append(track_id)
+            if urls:
+                self.logger.info(f"Found {len(urls)} Spotify URLs in message {message.id}")
+                for url in urls:
+                    track_id = self.sanitize_spotify_url(url)
+                    if track_id:
+                        url_dict[message.author.name].append(track_id)
+                        self.logger.info(f"Added track ID {track_id} from {message.author.name}")
             await self.config.last_message_id.set(str(message.id))
 
+        self.logger.info(f"Checked {message_count} messages")
         self.logger.info(f"Found {len(url_dict)} users with Spotify links")
         
         if url_dict:
