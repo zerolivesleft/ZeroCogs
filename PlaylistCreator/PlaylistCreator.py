@@ -220,12 +220,12 @@ class URLGrabber(commands.Cog):
             self.spotify_token = await self.get_spotify_token()
         if not self.spotify_token:
             self.logger.error("Failed to get Spotify token")
-            return
+            return False
 
         playlist_id = await self.config.spotify_playlist_id()
         if not playlist_id:
             self.logger.error("Spotify playlist ID not set")
-            return
+            return False
 
         headers = {
             "Authorization": f"Bearer {self.spotify_token}",
@@ -241,7 +241,7 @@ class URLGrabber(commands.Cog):
                     self.logger.info(f"Playlist currently has {len(current_track_ids)} tracks")
                 else:
                     self.logger.error(f"Failed to get current playlist tracks. Status: {resp.status}")
-                    return
+                    return False
 
         # Get previously added tracks
         added_tracks = await self.config.added_tracks()
@@ -265,13 +265,17 @@ class URLGrabber(commands.Cog):
                             async with session.post(f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks", headers=headers, json=data) as retry_resp:
                                 if retry_resp.status != 201:
                                     self.logger.error(f"Failed to add tracks to playlist after token refresh. Status: {retry_resp.status}")
+                                    return False
                                 else:
                                     self.logger.info(f"Successfully added {len(tracks_to_add)} tracks to playlist after token refresh")
                                     added_tracks.extend(tracks_to_add)
                         else:
                             self.logger.error("Failed to refresh Spotify token")
+                            return False
                     elif resp.status != 201:
-                        self.logger.error(f"Failed to add tracks to playlist. Status: {resp.status}")
+                        error_text = await resp.text()
+                        self.logger.error(f"Failed to add tracks to playlist. Status: {resp.status}, Response: {error_text}")
+                        return False
                     else:
                         self.logger.info(f"Successfully added {len(tracks_to_add)} tracks to playlist")
                         added_tracks.extend(tracks_to_add)
@@ -279,6 +283,7 @@ class URLGrabber(commands.Cog):
         # Update the list of added tracks in the config
         await self.config.added_tracks.set(added_tracks)
         self.logger.info(f"Updated added_tracks in config. Total: {len(added_tracks)}")
+        return True
 
     @url_check.before_loop
     async def before_url_check(self):
