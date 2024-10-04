@@ -395,6 +395,7 @@ class URLGrabber(commands.Cog):
             "Content-Type": "application/json"
         }
 
+        self.logger.info("Fetching current tracks in the playlist")
         # Get current tracks in the playlist
         async with aiohttp.ClientSession() as session:
             async with session.get(f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks", headers=headers) as resp:
@@ -412,30 +413,39 @@ class URLGrabber(commands.Cog):
 
         tracks_to_add = []
         for track_id in track_ids:
-            if track_id not in current_track_ids and track_id not in added_tracks:
-                # Get track details
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://api.spotify.com/v1/tracks/{track_id}", headers=headers) as resp:
-                        if resp.status != 200:
-                            self.logger.error(f"Failed to get track details for {track_id}")
-                            continue
-                        track_data = await resp.json()
-                
-                track_name = track_data['name']
-                artist_name = track_data['artists'][0]['name']
-                
-                self.logger.info(f"Checking track: '{track_name}' by {artist_name}")
-                
-                # Get lyrics and check for offensive words
-                lyrics = await self.get_lyrics(track_name, artist_name)
-                if lyrics is None:
-                    self.logger.info(f"Couldn't find lyrics for '{track_name}' by {artist_name}. Adding to playlist.")
-                    tracks_to_add.append(track_id)
-                elif not self.contains_offensive_words(lyrics):
-                    self.logger.info(f"No offensive words found in '{track_name}' by {artist_name}. Adding to playlist.")
-                    tracks_to_add.append(track_id)
-                else:
-                    self.logger.info(f"Skipped track '{track_name}' by {artist_name} due to offensive lyrics")
+            self.logger.info(f"Processing track ID: {track_id}")
+            if track_id in current_track_ids:
+                self.logger.info(f"Track {track_id} already in playlist. Skipping.")
+                continue
+            if track_id in added_tracks:
+                self.logger.info(f"Track {track_id} already added previously. Skipping.")
+                continue
+
+            # Get track details
+            self.logger.info(f"Fetching details for track {track_id}")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"https://api.spotify.com/v1/tracks/{track_id}", headers=headers) as resp:
+                    if resp.status != 200:
+                        self.logger.error(f"Failed to get track details for {track_id}. Status: {resp.status}")
+                        continue
+                    track_data = await resp.json()
+            
+            track_name = track_data['name']
+            artist_name = track_data['artists'][0]['name']
+            
+            self.logger.info(f"Checking track: '{track_name}' by {artist_name}")
+            
+            # Get lyrics and check for offensive words
+            self.logger.info(f"Fetching lyrics for '{track_name}' by {artist_name}")
+            lyrics = await self.get_lyrics(track_name, artist_name)
+            if lyrics is None:
+                self.logger.info(f"Couldn't find lyrics for '{track_name}' by {artist_name}. Adding to playlist.")
+                tracks_to_add.append(track_id)
+            elif not self.contains_offensive_words(lyrics):
+                self.logger.info(f"No offensive words found in '{track_name}' by {artist_name}. Adding to playlist.")
+                tracks_to_add.append(track_id)
+            else:
+                self.logger.info(f"Skipped track '{track_name}' by {artist_name} due to offensive lyrics")
 
         self.logger.info(f"Tracks to add after filtering: {len(tracks_to_add)}")
 
