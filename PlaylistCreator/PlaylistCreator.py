@@ -251,9 +251,22 @@ class URLGrabber(commands.Cog):
             data = {"uris": [f"spotify:track:{track_id}" for track_id in tracks_to_add]}
             async with aiohttp.ClientSession() as session:
                 async with session.post(f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks", headers=headers, json=data) as resp:
-                    if resp.status != 201:
+                    if resp.status == 401:
+                        self.logger.warning("Spotify token expired, attempting to refresh")
+                        new_token = await self.get_spotify_token()
+                        if new_token:
+                            self.spotify_token = new_token
+                            headers["Authorization"] = f"Bearer {self.spotify_token}"
+                            async with session.post(f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks", headers=headers, json=data) as retry_resp:
+                                if retry_resp.status != 201:
+                                    self.logger.error(f"Failed to add tracks to playlist after token refresh. Status: {retry_resp.status}")
+                                else:
+                                    self.logger.info(f"Successfully added {len(tracks_to_add)} tracks to playlist after token refresh")
+                                    added_tracks.extend(tracks_to_add)
+                        else:
+                            self.logger.error("Failed to refresh Spotify token")
+                    elif resp.status != 201:
                         self.logger.error(f"Failed to add tracks to playlist. Status: {resp.status}")
-                        self.spotify_token = None  # Reset token if request failed
                     else:
                         self.logger.info(f"Successfully added {len(tracks_to_add)} tracks to playlist")
                         added_tracks.extend(tracks_to_add)
@@ -265,6 +278,27 @@ class URLGrabber(commands.Cog):
     @url_check.before_loop
     async def before_url_check(self):
         await self.bot.wait_until_ready()
+
+    @commands.command()
+    async def refresh_spotify_token(self, ctx):
+        """Manually refresh the Spotify access token."""
+        old_token = self.spotify_token
+        new_token = await self.get_spotify_token()
+        if new_token:
+            self.spotify_token = new_token
+            await ctx.send("Spotify token refreshed successfully.")
+            self.logger.info("Spotify token refreshed manually")
+        else:
+            await ctx.send("Failed to refresh Spotify token. Check your client credentials.")
+            self.logger.error("Failed to refresh Spotify token manually")
+
+    @commands.command()
+    @commands.admin_or_permissions(manage_guild=True)
+    async def reset_last_message(self, ctx):
+        """Reset the last processed message ID to start checking from the beginning."""
+        await self.config.last_message_id.set(None)
+        self.logger.info("Last message ID reset to None")
+        await ctx.send("Last processed message ID has been reset. The next URL grab will start from the beginning of the channel history.")
 
 async def setup(bot):
     await bot.add_cog(URLGrabber(bot))
