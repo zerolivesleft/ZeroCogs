@@ -367,9 +367,15 @@ class URLGrabber(commands.Cog):
 
     def contains_offensive_words(self, lyrics):
         if not lyrics:
+            self.logger.info("No lyrics provided to check for offensive words")
             return False
         lowered_lyrics = lyrics.lower()
-        return any(word in lowered_lyrics for word in OFFENSIVE_WORDS)
+        for word in OFFENSIVE_WORDS:
+            if word in lowered_lyrics:
+                self.logger.info(f"Offensive word found: '{word}'")
+                return True
+        self.logger.info("No offensive words found in lyrics")
+        return False
 
     async def add_tracks_to_playlist(self, track_ids):
         self.logger.info(f"Attempting to add {len(track_ids)} tracks to playlist")
@@ -404,7 +410,6 @@ class URLGrabber(commands.Cog):
         added_tracks = await self.config.added_tracks()
         self.logger.info(f"Previously added tracks: {len(added_tracks)}")
 
-        # Determine which tracks to add
         tracks_to_add = []
         for track_id in track_ids:
             if track_id not in current_track_ids and track_id not in added_tracks:
@@ -419,9 +424,15 @@ class URLGrabber(commands.Cog):
                 track_name = track_data['name']
                 artist_name = track_data['artists'][0]['name']
                 
+                self.logger.info(f"Checking track: '{track_name}' by {artist_name}")
+                
                 # Get lyrics and check for offensive words
                 lyrics = await self.get_lyrics(track_name, artist_name)
-                if not self.contains_offensive_words(lyrics):
+                if lyrics is None:
+                    self.logger.info(f"Couldn't find lyrics for '{track_name}' by {artist_name}. Adding to playlist.")
+                    tracks_to_add.append(track_id)
+                elif not self.contains_offensive_words(lyrics):
+                    self.logger.info(f"No offensive words found in '{track_name}' by {artist_name}. Adding to playlist.")
                     tracks_to_add.append(track_id)
                 else:
                     self.logger.info(f"Skipped track '{track_name}' by {artist_name} due to offensive lyrics")
