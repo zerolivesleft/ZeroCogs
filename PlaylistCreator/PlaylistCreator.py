@@ -223,26 +223,35 @@ class URLGrabber(commands.Cog):
         )
 
         await ctx.send(f"Please open this URL in your browser: {auth_url}")
-        await ctx.send("After authorizing, you will be redirected to a non-existent page. Copy the entire URL of that page and paste it here.")
+        await ctx.send("After authorizing, you will be redirected to a page that says 'This site can't be reached'. "
+                       "Copy the URL from your browser's address bar and paste it here. "
+                       "It should start with 'https://example.com/callback?code=...'")
 
-        def check(m):
-            return m.author == ctx.author and m.channel == ctx.channel
+        while True:
+            def check(m):
+                return m.author == ctx.author and m.channel == ctx.channel
 
-        try:
-            msg = await self.bot.wait_for('message', check=check, timeout=300.0)
-        except asyncio.TimeoutError:
-            await ctx.send("Authentication timed out. Please try again.")
-            return
+            try:
+                msg = await self.bot.wait_for('message', check=check, timeout=300.0)
+            except asyncio.TimeoutError:
+                await ctx.send("Authentication timed out. Please try again.")
+                return
 
-        auth_response = msg.content
-        parsed_url = urlparse(auth_response)
-        query_params = parse_qs(parsed_url.query)
-        
-        if 'code' not in query_params:
-            await ctx.send("Could not find the authorization code in the URL. Please make sure you copied the entire URL.")
-            return
-        
-        code = query_params['code'][0]
+            auth_response = msg.content
+            parsed_url = urlparse(auth_response)
+            query_params = parse_qs(parsed_url.query)
+            
+            if 'code' in query_params:
+                code = query_params['code'][0]
+                break
+            else:
+                await ctx.send("Could not find the authorization code in the URL. "
+                               "Please make sure you're copying the URL from the page that says 'This site can't be reached'. "
+                               "Try again or type 'cancel' to stop.")
+                
+                if auth_response.lower() == 'cancel':
+                    await ctx.send("Authentication cancelled.")
+                    return
 
         success = await self.get_spotify_token(code, code_verifier)
         if success:
