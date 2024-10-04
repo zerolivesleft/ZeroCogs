@@ -347,7 +347,8 @@ class URLGrabber(commands.Cog):
         async with aiohttp.ClientSession() as session:
             async with session.get(search_url, headers=headers, params={"q": f"{track_name} {artist_name}"}) as resp:
                 if resp.status != 200:
-                    self.logger.error(f"Genius API request failed. Status: {resp.status}")
+                    error_text = await resp.text()
+                    self.logger.error(f"Genius API request failed. Status: {resp.status}, Response: {error_text}")
                     return None
                 data = await resp.json()
         
