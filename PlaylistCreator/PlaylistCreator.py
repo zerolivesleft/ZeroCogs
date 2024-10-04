@@ -1,6 +1,6 @@
 import re
 import aiohttp
-from redbot.core import commands, Config
+from redbot.core import commands, Config, checks
 from discord.ext import tasks
 from collections import defaultdict
 from base64 import b64encode
@@ -12,6 +12,7 @@ import secrets
 import base64
 import hashlib
 from urllib.parse import urlparse, parse_qs, quote
+import lyricsgenius
 
 # Add this list at the top of your file or in a separate configuration
 OFFENSIVE_WORDS = ["fag", "nigger", "retard", "gay"]  # Add your list of offensive words here
@@ -38,12 +39,13 @@ class URLGrabber(commands.Cog):
         self.logger = logging.getLogger("red.PlaylistCreator")
         self.logger.info("PlaylistCreator cog initialized")
         self.auth_code = None
+        self.genius = None
 
     def cog_unload(self):
         self.url_check.cancel()
 
     @commands.group()
-    @commands.admin_or_permissions(manage_guild=True)
+    @commands.admin()
     async def playlistset(self, ctx):
         """Configure the PlaylistCreator settings."""
         self.logger.info("playlistset command invoked")
@@ -51,43 +53,50 @@ class URLGrabber(commands.Cog):
             await ctx.send_help(ctx.command)
 
     @playlistset.command(name="channel")
+    @commands.admin()
     async def set_channel(self, ctx, channel_id: int):
         """Set the channel to monitor for Spotify links."""
         await self.config.channel_id.set(channel_id)
         await ctx.send(f"Channel set to {channel_id}")
 
     @playlistset.command(name="user")
+    @commands.admin()
     async def set_user(self, ctx, user_id: int):
         """Set the user ID for Spotify authentication."""
         await self.config.user_id.set(user_id)
         await ctx.send(f"User ID set to {user_id}")
 
     @playlistset.command(name="spotify_client_id")
+    @commands.admin()
     async def set_spotify_client_id(self, ctx, client_id: str):
         """Set the Spotify Client ID."""
         await self.config.spotify_client_id.set(client_id)
         await ctx.send("Spotify Client ID set.")
 
     @playlistset.command(name="spotify_client_secret")
+    @commands.admin()
     async def set_spotify_client_secret(self, ctx, client_secret: str):
         """Set the Spotify Client Secret."""
         await self.config.spotify_client_secret.set(client_secret)
         await ctx.send("Spotify Client Secret set.")
 
     @playlistset.command(name="spotify_playlist_id")
+    @commands.admin()
     async def set_spotify_playlist_id(self, ctx, playlist_id: str):
         """Set the Spotify Playlist ID."""
         await self.config.spotify_playlist_id.set(playlist_id)
         await ctx.send(f"Spotify Playlist ID set to {playlist_id}")
 
     @playlistset.command(name="genius_api_key")
+    @commands.admin()
     async def set_genius_api_key(self, ctx, api_key: str):
         """Set the Genius API Key."""
         await self.config.genius_api_key.set(api_key)
+        self.genius = lyricsgenius.Genius(api_key)
         await ctx.send("Genius API Key set.")
 
     @commands.command()
-    @commands.admin_or_permissions(manage_guild=True)
+    @commands.admin()
     async def playlistsettings(self, ctx):
         """Show the current PlaylistCreator settings."""
         channel_id = await self.config.channel_id()
@@ -107,12 +116,14 @@ class URLGrabber(commands.Cog):
         await ctx.send(f"Current settings:\n```\n{settings}\n```")
 
     @commands.command()
+    @commands.admin()
     async def seturldm(self, ctx, user_id: int):
         """Set the user to send grabbed URLs to."""
         await self.config.user_id.set(user_id)
         await ctx.send(f"URL recipient set to user with ID {user_id}")
 
     @commands.command()
+    @commands.admin()
     async def setspotifycredentials(self, ctx, client_id: str, client_secret: str):
         """Set Spotify API credentials."""
         await self.config.spotify_client_id.set(client_id)
@@ -120,12 +131,14 @@ class URLGrabber(commands.Cog):
         await ctx.send("Spotify credentials set.")
 
     @commands.command()
+    @commands.admin()
     async def setspotifyplaylist(self, ctx, playlist_id: str):
         """Set Spotify playlist ID."""
         await self.config.spotify_playlist_id.set(playlist_id)
         await ctx.send(f"Spotify playlist ID set to {playlist_id}")
 
     @commands.command()
+    @commands.admin()
     async def graburl(self, ctx):
         """Manually trigger URL grabbing process."""
         self.logger.info("Manual URL grab triggered")
@@ -204,12 +217,14 @@ class URLGrabber(commands.Cog):
         return None
 
     @playlistset.command(name="clear_added_tracks")
+    @commands.admin()
     async def clear_added_tracks(self, ctx):
         """Clear the list of tracks that have been added to the playlist."""
         await self.config.added_tracks.set([])
         await ctx.send("The list of added tracks has been cleared.")
 
     @commands.command()
+    @commands.admin()
     async def spotify_auth(self, ctx):
         """Start the Spotify authentication process."""
         client_id = await self.config.spotify_client_id()
@@ -332,47 +347,24 @@ class URLGrabber(commands.Cog):
                     return False
 
     async def get_lyrics(self, track_name, artist_name):
-        genius_api_key = await self.config.genius_api_key()
-        if not genius_api_key:
-            self.logger.error("Genius API key is not set")
-            return None
+        if not self.genius:
+            genius_api_key = await self.config.genius_api_key()
+            if not genius_api_key:
+                self.logger.error("Genius API key is not set")
+                return None
+            self.genius = lyricsgenius.Genius(genius_api_key)
 
-        self.logger.info(f"Using Genius API key starting with: {genius_api_key[:5]}...")
-
-        base_url = "https://api.genius.com"
-        headers = {"Authorization": f"Bearer {genius_api_key}"}
-        search_url = f"{base_url}/search"
-        
         self.logger.info(f"Searching Genius for '{track_name}' by {artist_name}")
-        async with aiohttp.ClientSession() as session:
-            async with session.get(search_url, headers=headers, params={"q": f"{track_name} {artist_name}"}) as resp:
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    self.logger.error(f"Genius API request failed. Status: {resp.status}, Response: {error_text}")
-                    return None
-                data = await resp.json()
-        
-        if not data['response']['hits']:
-            self.logger.info(f"No results found on Genius for '{track_name}' by {artist_name}")
-            return None
-        
-        song_url = data['response']['hits'][0]['result']['url']
-        self.logger.info(f"Found Genius URL for '{track_name}': {song_url}")
-        
-        async with aiohttp.ClientSession() as session:
-            async with session.get(song_url) as resp:
-                if resp.status != 200:
-                    self.logger.error(f"Failed to fetch lyrics page. Status: {resp.status}")
-                    return None
-                html = await resp.text()
-        
-        lyrics_match = re.search(r'<div class="lyrics">(.*?)</div>', html, re.DOTALL)
-        if lyrics_match:
-            lyrics = re.sub(r'<.*?>', '', lyrics_match.group(1)).strip()
-            self.logger.info(f"Successfully extracted lyrics for '{track_name}'")
-            return lyrics
-        else:
-            self.logger.info(f"Could not extract lyrics from Genius page for '{track_name}'")
+        try:
+            song = self.genius.search_song(track_name, artist_name)
+            if song:
+                self.logger.info(f"Found lyrics for '{track_name}' by {artist_name}")
+                return song.lyrics
+            else:
+                self.logger.info(f"No lyrics found for '{track_name}' by {artist_name}")
+                return None
+        except Exception as e:
+            self.logger.error(f"Error fetching lyrics: {str(e)}")
             return None
 
     def contains_offensive_words(self, lyrics):
@@ -498,6 +490,7 @@ class URLGrabber(commands.Cog):
         await self.bot.wait_until_ready()
 
     @commands.command()
+    @commands.admin()
     async def refresh_spotify_token(self, ctx):
         """Manually refresh the Spotify access token."""
         old_token = self.spotify_token
@@ -511,7 +504,7 @@ class URLGrabber(commands.Cog):
             self.logger.error("Failed to refresh Spotify token manually")
 
     @commands.command()
-    @commands.admin_or_permissions(manage_guild=True)
+    @commands.admin()
     async def reset_last_message(self, ctx):
         """Reset the last processed message ID to start checking from the beginning."""
         await self.config.last_message_id.set(None)
@@ -519,6 +512,7 @@ class URLGrabber(commands.Cog):
         await ctx.send("Last processed message ID has been reset. The next URL grab will start from the beginning of the channel history.")
 
     @commands.command()
+    @commands.admin()
     async def check_spotify_token(self, ctx):
         """Check the current Spotify token and its scopes."""
         if not self.spotify_token:
@@ -542,6 +536,7 @@ class URLGrabber(commands.Cog):
                     await ctx.send(f"Failed to check Spotify token. Status: {resp.status}, Response: {error_text}")
 
     @commands.command()
+    @commands.admin()
     async def check_spotify_config(self, ctx):
         """Check the current Spotify configuration."""
         client_id = await self.config.spotify_client_id()
