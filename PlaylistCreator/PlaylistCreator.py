@@ -5,6 +5,7 @@ from discord.ext import tasks
 from collections import defaultdict
 from base64 import b64encode
 import logging
+import discord
 
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
@@ -16,7 +17,8 @@ class URLGrabber(commands.Cog):
             "spotify_client_id": None,
             "spotify_client_secret": None,
             "spotify_playlist_id": None,
-            "added_tracks": []
+            "added_tracks": [],
+            "last_message_id": None,
         }
         self.config.register_global(**default_global)
         self.url_pattern = re.compile(r'https://open\.spotify\.com/track/([a-zA-Z0-9]+)')
@@ -135,18 +137,31 @@ class URLGrabber(commands.Cog):
         url_dict = defaultdict(list)
         
         last_message_id = await self.config.last_message_id()
-        kwargs = {'after': last_message_id} if last_message_id else {}
+        kwargs = {}
+        if last_message_id:
+            kwargs['after'] = discord.Object(id=int(last_message_id))
         
         async for message in channel.history(limit=None, oldest_first=True, **kwargs):
-            urls = self.url_pattern.findall(message.content)
-            if urls:
-                for url in urls:
-                    url_dict[message.author.name].append(url)
-            await self.config.last_message_id.set(message.id)
+            urls = re.findall(r'(https://open\.spotify\.com/track/[^\s]+)', message.content)
+            for url in urls:
+                track_id = self.sanitize_spotify_url(url)
+                if track_id:
+                    url_dict[message.author.name].append(track_id)
+            await self.config.last_message_id.set(str(message.id))
 
         if url_dict:
             track_ids = list(set([track_id for tracks in url_dict.values() for track_id in tracks]))
             await self.add_tracks_to_playlist(track_ids)
+
+    def sanitize_spotify_url(self, url):
+        """
+        Sanitize and validate a Spotify track URL.
+        Returns the track ID if valid, None otherwise.
+        """
+        match = self.url_pattern.match(url)
+        if match:
+            return match.group(1)
+        return None
 
     async def get_spotify_token(self):
         client_id = await self.config.spotify_client_id()
