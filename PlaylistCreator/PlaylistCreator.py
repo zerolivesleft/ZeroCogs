@@ -16,7 +16,6 @@ class URLGrabber(commands.Cog):
             "spotify_client_id": None,
             "spotify_client_secret": None,
             "spotify_playlist_id": None,
-            "last_message_id": None,
             "added_tracks": []
         }
         self.config.register_global(**default_global)
@@ -182,6 +181,12 @@ class URLGrabber(commands.Cog):
                     return json_data["access_token"]
         return None
 
+    @playlistset.command(name="clear_added_tracks")
+    async def clear_added_tracks(self, ctx):
+        """Clear the list of tracks that have been added to the playlist."""
+        await self.config.added_tracks.set([])
+        await ctx.send("The list of added tracks has been cleared.")
+
     async def add_tracks_to_playlist(self, track_ids):
         if not self.spotify_token:
             self.spotify_token = await self.get_spotify_token()
@@ -209,9 +214,8 @@ class URLGrabber(commands.Cog):
         # Get previously added tracks
         added_tracks = await self.config.added_tracks()
 
-        # Determine which tracks to add and which to remove
+        # Determine which tracks to add
         tracks_to_add = [track_id for track_id in track_ids if track_id not in current_track_ids and track_id not in added_tracks]
-        tracks_to_remove = [track_id for track_id in added_tracks if track_id not in current_track_ids]
 
         # Add new tracks
         if tracks_to_add:
@@ -222,15 +226,6 @@ class URLGrabber(commands.Cog):
                         self.spotify_token = None  # Reset token if request failed
                     else:
                         added_tracks.extend(tracks_to_add)
-
-        # Remove tracks that are no longer in the playlist
-        if tracks_to_remove:
-            data = {"tracks": [{"uri": f"spotify:track:{track_id}"} for track_id in tracks_to_remove]}
-            async with aiohttp.ClientSession() as session:
-                async with session.delete(f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks", headers=headers, json=data) as resp:
-                    if resp.status == 200:
-                        for track_id in tracks_to_remove:
-                            added_tracks.remove(track_id)
 
         # Update the list of added tracks in the config
         await self.config.added_tracks.set(added_tracks)
