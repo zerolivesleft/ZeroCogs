@@ -11,7 +11,7 @@ from aiohttp import web
 import secrets
 import base64
 import hashlib
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
