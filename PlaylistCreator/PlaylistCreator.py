@@ -13,6 +13,9 @@ import base64
 import hashlib
 from urllib.parse import urlparse, parse_qs, quote
 
+# Add this list at the top of your file or in a separate configuration
+OFFENSIVE_WORDS = ["fag", "nigger", "retard", "gay"]  # Add your list of offensive words here
+
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -319,6 +322,43 @@ class URLGrabber(commands.Cog):
                     self.logger.error(f"Failed to refresh Spotify token. Status: {resp.status}")
                     return False
 
+    async def get_lyrics(self, track_name, artist_name):
+        # Using the Genius API to fetch lyrics
+        genius_api_key = "YOUR_GENIUS_API_KEY"  # You'll need to get this from the Genius API
+        base_url = "https://api.genius.com"
+        headers = {"Authorization": f"Bearer {genius_api_key}"}
+        search_url = f"{base_url}/search"
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(search_url, headers=headers, params={"q": f"{track_name} {artist_name}"}) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json()
+        
+        if not data['response']['hits']:
+            return None
+        
+        song_url = data['response']['hits'][0]['result']['url']
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(song_url) as resp:
+                if resp.status != 200:
+                    return None
+                html = await resp.text()
+        
+        # Extract lyrics from HTML (this is a simple method and might need adjustment)
+        lyrics_match = re.search(r'<div class="lyrics">(.*?)</div>', html, re.DOTALL)
+        if lyrics_match:
+            lyrics = lyrics_match.group(1)
+            return re.sub(r'<.*?>', '', lyrics).strip()
+        return None
+
+    def contains_offensive_words(self, lyrics):
+        if not lyrics:
+            return False
+        lowered_lyrics = lyrics.lower()
+        return any(word in lowered_lyrics for word in OFFENSIVE_WORDS)
+
     async def add_tracks_to_playlist(self, track_ids):
         self.logger.info(f"Attempting to add {len(track_ids)} tracks to playlist")
         if not self.spotify_token:
@@ -353,8 +393,28 @@ class URLGrabber(commands.Cog):
         self.logger.info(f"Previously added tracks: {len(added_tracks)}")
 
         # Determine which tracks to add
-        tracks_to_add = [track_id for track_id in track_ids if track_id not in current_track_ids and track_id not in added_tracks]
-        self.logger.info(f"Tracks to add: {len(tracks_to_add)}")
+        tracks_to_add = []
+        for track_id in track_ids:
+            if track_id not in current_track_ids and track_id not in added_tracks:
+                # Get track details
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"https://api.spotify.com/v1/tracks/{track_id}", headers=headers) as resp:
+                        if resp.status != 200:
+                            self.logger.error(f"Failed to get track details for {track_id}")
+                            continue
+                        track_data = await resp.json()
+                
+                track_name = track_data['name']
+                artist_name = track_data['artists'][0]['name']
+                
+                # Get lyrics and check for offensive words
+                lyrics = await self.get_lyrics(track_name, artist_name)
+                if not self.contains_offensive_words(lyrics):
+                    tracks_to_add.append(track_id)
+                else:
+                    self.logger.info(f"Skipped track '{track_name}' by {artist_name} due to offensive lyrics")
+
+        self.logger.info(f"Tracks to add after filtering: {len(tracks_to_add)}")
 
         # Add new tracks in chunks
         chunk_size = 100
