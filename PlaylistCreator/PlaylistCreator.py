@@ -6,6 +6,9 @@ from collections import defaultdict
 from base64 import b64encode
 import logging
 import discord
+import asyncio
+from aiohttp import web
+import secrets
 
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
@@ -17,6 +20,7 @@ class URLGrabber(commands.Cog):
             "spotify_client_id": None,
             "spotify_client_secret": None,
             "spotify_playlist_id": None,
+            "spotify_refresh_token": None,
             "added_tracks": [],
             "last_message_id": None,
         }
@@ -26,6 +30,7 @@ class URLGrabber(commands.Cog):
         self.spotify_token = None
         self.logger = logging.getLogger("red.PlaylistCreator")
         self.logger.info("PlaylistCreator cog initialized")
+        self.auth_code = None
 
     def cog_unload(self):
         self.url_check.cancel()
@@ -183,38 +188,110 @@ class URLGrabber(commands.Cog):
             return match.group(1)
         return None
 
-    async def get_spotify_token(self):
-        client_id = await self.config.spotify_client_id()
-        client_secret = await self.config.spotify_client_secret()
-        if not client_id or not client_secret:
-            self.logger.error("Spotify client ID or client secret not set")
-            return None
-
-        auth = b64encode(f"{client_id}:{client_secret}".encode()).decode()
-        headers = {
-            "Authorization": f"Basic {auth}",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        data = {"grant_type": "client_credentials"}
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post("https://accounts.spotify.com/api/token", headers=headers, data=data) as resp:
-                if resp.status == 200:
-                    json_data = await resp.json()
-                    self.logger.info("Successfully obtained Spotify token")
-                    return json_data["access_token"]
-                else:
-                    error_text = await resp.text()
-                    self.logger.error(f"Failed to get Spotify token. Status: {resp.status}, Response: {error_text}")
-        return None
-
     @playlistset.command(name="clear_added_tracks")
     async def clear_added_tracks(self, ctx):
         """Clear the list of tracks that have been added to the playlist."""
         await self.config.added_tracks.set([])
         await ctx.send("The list of added tracks has been cleared.")
 
+    @commands.command()
+    async def spotify_auth(self, ctx):
+        """Start the Spotify authentication process."""
+        client_id = await self.config.spotify_client_id()
+        if not client_id:
+            await ctx.send("Spotify client ID is not set. Please set it first.")
+            return
+
+        state = secrets.token_urlsafe(16)
+        scope = "playlist-modify-public playlist-modify-private"
+        redirect_uri = "http://localhost:8888/callback"
+
+        auth_url = f"https://accounts.spotify.com/authorize?response_type=code&client_id={client_id}&scope={scope}&redirect_uri={redirect_uri}&state={state}"
+
+        await ctx.send(f"Please click this link to authorize the application: {auth_url}")
+        await ctx.send("After authorizing, the browser will try to redirect to a local server. You can close the browser tab after seeing the success message.")
+
+        app = web.Application()
+        app.add_routes([web.get('/callback', self.handle_callback)])
+
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, 'localhost', 8888)
+        await site.start()
+
+        while not self.auth_code:
+            await asyncio.sleep(1)
+
+        await runner.cleanup()
+
+        await self.get_spotify_token(self.auth_code)
+        await ctx.send("Spotify authentication complete!")
+
+    async def handle_callback(self, request):
+        self.auth_code = request.query.get('code')
+        return web.Response(text="Authentication successful! You can close this window now.")
+
+    async def get_spotify_token(self, code):
+        client_id = await self.config.spotify_client_id()
+        client_secret = await self.config.spotify_client_secret()
+        redirect_uri = "http://localhost:8888/callback"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://accounts.spotify.com/api/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                }
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    self.spotify_token = data["access_token"]
+                    await self.config.spotify_refresh_token.set(data["refresh_token"])
+                    return True
+                else:
+                    self.logger.error(f"Failed to get Spotify token. Status: {resp.status}")
+                    return False
+
+    async def refresh_spotify_token(self):
+        client_id = await self.config.spotify_client_id()
+        client_secret = await self.config.spotify_client_secret()
+        refresh_token = await self.config.spotify_refresh_token()
+
+        if not refresh_token:
+            self.logger.error("No refresh token available. Please re-authenticate.")
+            return False
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://accounts.spotify.com/api/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                }
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    self.spotify_token = data["access_token"]
+                    if "refresh_token" in data:
+                        await self.config.spotify_refresh_token.set(data["refresh_token"])
+                    return True
+                else:
+                    self.logger.error(f"Failed to refresh Spotify token. Status: {resp.status}")
+                    return False
+
     async def add_tracks_to_playlist(self, track_ids):
+        if not self.spotify_token:
+            success = await self.refresh_spotify_token()
+            if not success:
+                self.logger.error("Failed to refresh Spotify token")
+                return False
+
         self.logger.info(f"Attempting to add {len(track_ids)} tracks to playlist")
         if not self.spotify_token:
             self.spotify_token = await self.get_spotify_token()
@@ -294,7 +371,7 @@ class URLGrabber(commands.Cog):
     async def refresh_spotify_token(self, ctx):
         """Manually refresh the Spotify access token."""
         old_token = self.spotify_token
-        new_token = await self.get_spotify_token()
+        new_token = await self.refresh_spotify_token()
         if new_token:
             self.spotify_token = new_token
             await ctx.send("Spotify token refreshed successfully.")
@@ -315,10 +392,10 @@ class URLGrabber(commands.Cog):
     async def check_spotify_token(self, ctx):
         """Check the current Spotify token and its scopes."""
         if not self.spotify_token:
-            self.spotify_token = await self.get_spotify_token()
-        if not self.spotify_token:
-            await ctx.send("Failed to get Spotify token.")
-            return
+            success = await self.refresh_spotify_token()
+            if not success:
+                await ctx.send("Failed to refresh Spotify token. Please re-authenticate using [p]spotify_auth")
+                return
 
         headers = {
             "Authorization": f"Bearer {self.spotify_token}",
@@ -329,8 +406,7 @@ class URLGrabber(commands.Cog):
             async with session.get("https://api.spotify.com/v1/me", headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    scopes = data.get("scopes", [])
-                    await ctx.send(f"Spotify token is valid. Scopes: {', '.join(scopes)}")
+                    await ctx.send(f"Spotify token is valid. User: {data['display_name']}")
                 else:
                     error_text = await resp.text()
                     await ctx.send(f"Failed to check Spotify token. Status: {resp.status}, Response: {error_text}")
