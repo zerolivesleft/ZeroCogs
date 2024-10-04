@@ -1,4 +1,4 @@
-from .PlaylistCreator import PlaylistCreator
+from .PlaylistCreator import URLGrabber
 
 async def setup(bot):
-    await bot.add_cog(PlaylistCreator(bot))
+    await bot.add_cog(URLGrabber(bot))
