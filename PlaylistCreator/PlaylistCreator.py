@@ -11,6 +11,7 @@ from aiohttp import web
 import secrets
 import base64
 import hashlib
+from urllib.parse import urlparse, parse_qs
 
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
@@ -234,10 +235,20 @@ class URLGrabber(commands.Cog):
             return
 
         auth_response = msg.content
-        code = auth_response.split("code=")[1].split("&")[0]
+        parsed_url = urlparse(auth_response)
+        query_params = parse_qs(parsed_url.query)
+        
+        if 'code' not in query_params:
+            await ctx.send("Could not find the authorization code in the URL. Please make sure you copied the entire URL.")
+            return
+        
+        code = query_params['code'][0]
 
-        await self.get_spotify_token(code, code_verifier)
-        await ctx.send("Spotify authentication complete!")
+        success = await self.get_spotify_token(code, code_verifier)
+        if success:
+            await ctx.send("Spotify authentication complete!")
+        else:
+            await ctx.send("Failed to authenticate with Spotify. Please try again.")
 
     async def get_spotify_token(self, code, code_verifier):
         client_id = await self.config.spotify_client_id()
