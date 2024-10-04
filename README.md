@@ -8,6 +8,10 @@ This repository contains custom cogs for Red-DiscordBot.
 
 Synchronizes Twitch stream schedules with Discord events. This cog automatically fetches the Twitch schedule for a specified user and creates or updates corresponding Discord events.
 
+### PlaylistCreator (URLGrabber)
+
+Automatically adds Spotify tracks shared in a specific Discord channel to a designated Spotify playlist.
+
 ## Installation
 
 To add these cogs to your Red instance:
@@ -20,11 +24,13 @@ To add these cogs to your Red instance:
 2. Install the desired cog:
    ```
    [p]cog install zeros-cogs TwitchScheduleSync
+   [p]cog install zeros-cogs PlaylistCreator
    ```
 
 3. Load the installed cog:
    ```
    [p]load TwitchScheduleSync
+   [p]load PlaylistCreator
    ```
 
 ## TwitchScheduleSync Setup
@@ -51,9 +57,32 @@ To add these cogs to your Red instance:
    [p]force_sync
    ```
 
-The cog will automatically sync every hour. Events in Discord will be created or updated to match the Twitch schedule, including stream title, category, start time, and thumbnail image.
+## PlaylistCreator (URLGrabber) Setup
 
-Note: This cog requires the bot to have the 'Manage Events' permission in your Discord server.
+1. Obtain Spotify API credentials:
+   - Go to https://developer.spotify.com/dashboard/
+   - Create a new application or use an existing one
+   - Note down the Client ID and Client Secret
+
+2. Create a Spotify playlist and note down its ID (the last part of the playlist URL)
+
+3. Set up the cog:
+   ```
+   [p]playlistset channel <channel_id>
+   [p]playlistset user <user_id>
+   [p]playlistset spotify_client_id <your_spotify_client_id>
+   [p]playlistset spotify_client_secret <your_spotify_client_secret>
+   [p]playlistset spotify_playlist_id <your_playlist_id>
+   ```
+
+4. Verify settings:
+   ```
+   [p]playlistsettings
+   ```
+
+5. The cog will now automatically check for Spotify track URLs in the specified channel every 5 minutes and add them to the designated playlist.
+
+Note: Ensure that the bot has the necessary permissions to read messages in the specified channel.
 
 ## Support
 
