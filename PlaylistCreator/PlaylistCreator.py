@@ -145,21 +145,8 @@ class URLGrabber(commands.Cog):
             await self.config.last_message_id.set(message.id)
 
         if url_dict:
-            dm_content = "Spotify tracks found in {}:\n\n".format(channel.name)
-            for author, track_ids in url_dict.items():
-                dm_content += f"**{author}**:\n"
-                dm_content += "\n".join(f"https://open.spotify.com/track/{track_id}" for track_id in track_ids)
-                dm_content += "\n\n"
-
-            while len(dm_content) > 2000:
-                split_index = dm_content.rfind('\n', 0, 2000)
-                await user.send(dm_content[:split_index])
-                dm_content = dm_content[split_index:].lstrip()
-
-            if dm_content:
-                await user.send(dm_content)
-
-            await self.add_tracks_to_playlist(list(set([track_id for tracks in url_dict.values() for track_id in tracks])))
+            track_ids = list(set([track_id for tracks in url_dict.values() for track_id in tracks]))
+            await self.add_tracks_to_playlist(track_ids)
 
     async def get_spotify_token(self):
         client_id = await self.config.spotify_client_id()
