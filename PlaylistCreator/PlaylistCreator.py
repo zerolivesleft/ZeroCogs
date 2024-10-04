@@ -210,12 +210,13 @@ class URLGrabber(commands.Cog):
 
         state = secrets.token_urlsafe(16)
         scope = quote("playlist-modify-public playlist-modify-private")
+        redirect_uri = quote("http://localhost:8888/callback")
 
         auth_url = (
             f"https://accounts.spotify.com/authorize"
             f"?client_id={client_id}"
             f"&response_type=code"
-            f"&redirect_uri=https://example.com/callback"
+            f"&redirect_uri={redirect_uri}"
             f"&scope={scope}"
             f"&state={state}"
             f"&code_challenge_method=S256"
@@ -223,9 +224,9 @@ class URLGrabber(commands.Cog):
         )
 
         await ctx.send(f"Please open this URL in your browser: {auth_url}")
-        await ctx.send("After authorizing, you will be redirected to a page that says 'This site can't be reached'. "
+        await ctx.send("After authorizing, you will be redirected to a page that might not load. "
                        "Copy the URL from your browser's address bar and paste it here. "
-                       "It should start with 'https://example.com/callback?code=...'")
+                       "It should start with 'http://localhost:8888/callback?code=...'")
 
         while True:
             def check(m):
@@ -246,7 +247,7 @@ class URLGrabber(commands.Cog):
                 break
             else:
                 await ctx.send("Could not find the authorization code in the URL. "
-                               "Please make sure you're copying the URL from the page that says 'This site can't be reached'. "
+                               "Please make sure you're copying the URL from the page that might not load. "
                                "Try again or type 'cancel' to stop.")
                 
                 if auth_response.lower() == 'cancel':
