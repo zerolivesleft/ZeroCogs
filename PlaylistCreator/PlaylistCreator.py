@@ -26,11 +26,17 @@ class URLGrabber(commands.Cog):
     def cog_unload(self):
         self.url_check.cancel()
 
-    @commands.command()
-    async def seturlchannel(self, ctx, channel_id: int):
-        """Set the channel to grab URLs from."""
+    @commands.group()
+    async def playlistset(self, ctx):
+        """Configure the PlaylistCreator settings."""
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(ctx.command)
+
+    @playlistset.command(name="channel")
+    async def set_channel(self, ctx, channel_id: int):
+        """Set the channel to monitor for Spotify links."""
         await self.config.channel_id.set(channel_id)
-        await ctx.send(f"URL grabbing channel set to {channel_id}")
+        await ctx.send(f"Channel set to {channel_id}")
 
     @commands.command()
     async def seturldm(self, ctx, user_id: int):
