@@ -209,7 +209,7 @@ class URLGrabber(commands.Cog):
         code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).decode().rstrip('=')
 
         state = secrets.token_urlsafe(16)
-        scope = "playlist-modify-public playlist-modify-private"
+        scope = quote("playlist-modify-public playlist-modify-private")
 
         auth_url = (
             f"https://accounts.spotify.com/authorize"
