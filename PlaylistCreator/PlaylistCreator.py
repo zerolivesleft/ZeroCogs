@@ -108,15 +108,18 @@ class URLGrabber(commands.Cog):
     @commands.command()
     async def graburl(self, ctx):
         """Manually trigger URL grabbing process."""
+        self.logger.info("Manual URL grab triggered")
         channel_id = await self.config.channel_id()
         user_id = await self.config.user_id()
         if not channel_id or not user_id:
             await ctx.send("Please set both the channel and user ID first.")
+            self.logger.warning("Channel ID or User ID not set")
             return
 
         await ctx.send("Manually triggering URL grab...")
         await self.perform_url_check()
         await ctx.send("URL grab complete.")
+        self.logger.info("Manual URL grab completed")
 
     @tasks.loop(minutes=5.0)
     async def url_check(self):
@@ -125,18 +128,23 @@ class URLGrabber(commands.Cog):
     async def perform_url_check(self):
         channel_id = await self.config.channel_id()
         user_id = await self.config.user_id()
+        self.logger.info(f"Performing URL check for channel {channel_id} and user {user_id}")
+        
         if not channel_id or not user_id:
+            self.logger.warning("Channel ID or User ID not set")
             return
 
         channel = self.bot.get_channel(channel_id)
         user = self.bot.get_user(user_id)
 
         if not channel or not user:
+            self.logger.warning("Could not find channel or user")
             return
 
         url_dict = defaultdict(list)
         
         last_message_id = await self.config.last_message_id()
+        self.logger.info(f"Last processed message ID: {last_message_id}")
         kwargs = {}
         if last_message_id:
             kwargs['after'] = discord.Object(id=int(last_message_id))
@@ -149,9 +157,14 @@ class URLGrabber(commands.Cog):
                     url_dict[message.author.name].append(track_id)
             await self.config.last_message_id.set(str(message.id))
 
+        self.logger.info(f"Found {len(url_dict)} users with Spotify links")
+        
         if url_dict:
             track_ids = list(set([track_id for tracks in url_dict.values() for track_id in tracks]))
+            self.logger.info(f"Found {len(track_ids)} unique track IDs")
             await self.add_tracks_to_playlist(track_ids)
+        else:
+            self.logger.info("No new Spotify links found")
 
     def sanitize_spotify_url(self, url):
         """
@@ -190,13 +203,16 @@ class URLGrabber(commands.Cog):
         await ctx.send("The list of added tracks has been cleared.")
 
     async def add_tracks_to_playlist(self, track_ids):
+        self.logger.info(f"Attempting to add {len(track_ids)} tracks to playlist")
         if not self.spotify_token:
             self.spotify_token = await self.get_spotify_token()
         if not self.spotify_token:
+            self.logger.error("Failed to get Spotify token")
             return
 
         playlist_id = await self.config.spotify_playlist_id()
         if not playlist_id:
+            self.logger.error("Spotify playlist ID not set")
             return
 
         headers = {
@@ -210,14 +226,18 @@ class URLGrabber(commands.Cog):
                 if resp.status == 200:
                     playlist_tracks = await resp.json()
                     current_track_ids = [item['track']['id'] for item in playlist_tracks['items']]
+                    self.logger.info(f"Playlist currently has {len(current_track_ids)} tracks")
                 else:
+                    self.logger.error(f"Failed to get current playlist tracks. Status: {resp.status}")
                     return
 
         # Get previously added tracks
         added_tracks = await self.config.added_tracks()
+        self.logger.info(f"Previously added tracks: {len(added_tracks)}")
 
         # Determine which tracks to add
         tracks_to_add = [track_id for track_id in track_ids if track_id not in current_track_ids and track_id not in added_tracks]
+        self.logger.info(f"Tracks to add: {len(tracks_to_add)}")
 
         # Add new tracks
         if tracks_to_add:
@@ -225,12 +245,15 @@ class URLGrabber(commands.Cog):
             async with aiohttp.ClientSession() as session:
                 async with session.post(f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks", headers=headers, json=data) as resp:
                     if resp.status != 201:
+                        self.logger.error(f"Failed to add tracks to playlist. Status: {resp.status}")
                         self.spotify_token = None  # Reset token if request failed
                     else:
+                        self.logger.info(f"Successfully added {len(tracks_to_add)} tracks to playlist")
                         added_tracks.extend(tracks_to_add)
 
         # Update the list of added tracks in the config
         await self.config.added_tracks.set(added_tracks)
+        self.logger.info(f"Updated added_tracks in config. Total: {len(added_tracks)}")
 
     @url_check.before_loop
     async def before_url_check(self):
