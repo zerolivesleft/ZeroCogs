@@ -263,26 +263,31 @@ class URLGrabber(commands.Cog):
     async def get_spotify_token(self, code, code_verifier):
         client_id = await self.config.spotify_client_id()
         client_secret = await self.config.spotify_client_secret()
+        redirect_uri = "http://localhost:8888/callback"
+
+        self.logger.info(f"Attempting to exchange code for token. Code: {code[:10]}...")
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://accounts.spotify.com/api/token",
-                data={
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "redirect_uri": "https://example.com/callback",
-                    "code_verifier": code_verifier,
-                }
-            ) as resp:
+            data = {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "code_verifier": code_verifier,
+            }
+            self.logger.info(f"Token exchange data: {data}")
+
+            async with session.post("https://accounts.spotify.com/api/token", data=data) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     self.spotify_token = data["access_token"]
                     await self.config.spotify_refresh_token.set(data["refresh_token"])
+                    self.logger.info("Successfully obtained Spotify token")
                     return True
                 else:
-                    self.logger.error(f"Failed to get Spotify token. Status: {resp.status}")
+                    error_text = await resp.text()
+                    self.logger.error(f"Failed to get Spotify token. Status: {resp.status}, Response: {error_text}")
                     return False
 
     async def refresh_spotify_token(self):
@@ -439,6 +444,17 @@ class URLGrabber(commands.Cog):
                 else:
                     error_text = await resp.text()
                     await ctx.send(f"Failed to check Spotify token. Status: {resp.status}, Response: {error_text}")
+
+    @commands.command()
+    async def check_spotify_config(self, ctx):
+        """Check the current Spotify configuration."""
+        client_id = await self.config.spotify_client_id()
+        client_secret = await self.config.spotify_client_secret()
+        playlist_id = await self.config.spotify_playlist_id()
+
+        await ctx.send(f"Spotify Client ID: {'Set' if client_id else 'Not set'}\n"
+                       f"Spotify Client Secret: {'Set' if client_secret else 'Not set'}\n"
+                       f"Spotify Playlist ID: {playlist_id if playlist_id else 'Not set'}")
 
 async def setup(bot):
     await bot.add_cog(URLGrabber(bot))
