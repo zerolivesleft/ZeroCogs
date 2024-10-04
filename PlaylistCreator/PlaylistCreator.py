@@ -29,6 +29,7 @@ class URLGrabber(commands.Cog):
             "spotify_refresh_token": None,
             "added_tracks": [],
             "last_message_id": None,
+            "genius_api_key": None,
         }
         self.config.register_global(**default_global)
         self.url_pattern = re.compile(r'https://open\.spotify\.com/track/([a-zA-Z0-9]+)')
@@ -79,6 +80,12 @@ class URLGrabber(commands.Cog):
         await self.config.spotify_playlist_id.set(playlist_id)
         await ctx.send(f"Spotify Playlist ID set to {playlist_id}")
 
+    @playlistset.command(name="genius_api_key")
+    async def set_genius_api_key(self, ctx, api_key: str):
+        """Set the Genius API Key."""
+        await self.config.genius_api_key.set(api_key)
+        await ctx.send("Genius API Key set.")
+
     @commands.command()
     @commands.admin_or_permissions(manage_guild=True)
     async def playlistsettings(self, ctx):
@@ -87,13 +94,15 @@ class URLGrabber(commands.Cog):
         user_id = await self.config.user_id()
         spotify_client_id = await self.config.spotify_client_id()
         spotify_playlist_id = await self.config.spotify_playlist_id()
+        genius_api_key = await self.config.genius_api_key()
 
         settings = (
             f"Channel ID: {channel_id}\n"
             f"User ID: {user_id}\n"
             f"Spotify Client ID: {'Set' if spotify_client_id else 'Not set'}\n"
             f"Spotify Client Secret: {'Set' if await self.config.spotify_client_secret() else 'Not set'}\n"
-            f"Spotify Playlist ID: {spotify_playlist_id}"
+            f"Spotify Playlist ID: {spotify_playlist_id}\n"
+            f"Genius API Key: {'Set' if genius_api_key else 'Not set'}\n"
         )
         await ctx.send(f"Current settings:\n```\n{settings}\n```")
 
@@ -323,8 +332,11 @@ class URLGrabber(commands.Cog):
                     return False
 
     async def get_lyrics(self, track_name, artist_name):
-        # Using the Genius API to fetch lyrics
-        genius_api_key = "YOUR_GENIUS_API_KEY"  # You'll need to get this from the Genius API
+        genius_api_key = await self.config.genius_api_key()
+        if not genius_api_key:
+            self.logger.error("Genius API key is not set")
+            return None
+
         base_url = "https://api.genius.com"
         headers = {"Authorization": f"Bearer {genius_api_key}"}
         search_url = f"{base_url}/search"
