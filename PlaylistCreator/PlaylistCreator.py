@@ -341,29 +341,36 @@ class URLGrabber(commands.Cog):
         headers = {"Authorization": f"Bearer {genius_api_key}"}
         search_url = f"{base_url}/search"
         
+        self.logger.info(f"Searching Genius for '{track_name}' by {artist_name}")
         async with aiohttp.ClientSession() as session:
             async with session.get(search_url, headers=headers, params={"q": f"{track_name} {artist_name}"}) as resp:
                 if resp.status != 200:
+                    self.logger.error(f"Genius API request failed. Status: {resp.status}")
                     return None
                 data = await resp.json()
         
         if not data['response']['hits']:
+            self.logger.info(f"No results found on Genius for '{track_name}' by {artist_name}")
             return None
         
         song_url = data['response']['hits'][0]['result']['url']
+        self.logger.info(f"Found Genius URL for '{track_name}': {song_url}")
         
         async with aiohttp.ClientSession() as session:
             async with session.get(song_url) as resp:
                 if resp.status != 200:
+                    self.logger.error(f"Failed to fetch lyrics page. Status: {resp.status}")
                     return None
                 html = await resp.text()
         
-        # Extract lyrics from HTML (this is a simple method and might need adjustment)
         lyrics_match = re.search(r'<div class="lyrics">(.*?)</div>', html, re.DOTALL)
         if lyrics_match:
-            lyrics = lyrics_match.group(1)
-            return re.sub(r'<.*?>', '', lyrics).strip()
-        return None
+            lyrics = re.sub(r'<.*?>', '', lyrics_match.group(1)).strip()
+            self.logger.info(f"Successfully extracted lyrics for '{track_name}'")
+            return lyrics
+        else:
+            self.logger.info(f"Could not extract lyrics from Genius page for '{track_name}'")
+            return None
 
     def contains_offensive_words(self, lyrics):
         if not lyrics:
