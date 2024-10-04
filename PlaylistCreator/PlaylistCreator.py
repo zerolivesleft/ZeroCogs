@@ -4,6 +4,7 @@ from redbot.core import commands, Config
 from discord.ext import tasks
 from collections import defaultdict
 from base64 import b64encode
+import logging
 
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
@@ -22,13 +23,17 @@ class URLGrabber(commands.Cog):
         self.url_pattern = re.compile(r'https://open\.spotify\.com/track/([a-zA-Z0-9]+)')
         self.url_check.start()
         self.spotify_token = None
+        self.logger = logging.getLogger("red.PlaylistCreator")
+        self.logger.info("PlaylistCreator cog initialized")
 
     def cog_unload(self):
         self.url_check.cancel()
 
     @commands.group()
+    @commands.admin_or_permissions(manage_guild=True)
     async def playlistset(self, ctx):
         """Configure the PlaylistCreator settings."""
+        self.logger.info("playlistset command invoked")
         if ctx.invoked_subcommand is None:
             await ctx.send_help(ctx.command)
 
@@ -37,6 +42,48 @@ class URLGrabber(commands.Cog):
         """Set the channel to monitor for Spotify links."""
         await self.config.channel_id.set(channel_id)
         await ctx.send(f"Channel set to {channel_id}")
+
+    @playlistset.command(name="user")
+    async def set_user(self, ctx, user_id: int):
+        """Set the user ID for Spotify authentication."""
+        await self.config.user_id.set(user_id)
+        await ctx.send(f"User ID set to {user_id}")
+
+    @playlistset.command(name="spotify_client_id")
+    async def set_spotify_client_id(self, ctx, client_id: str):
+        """Set the Spotify Client ID."""
+        await self.config.spotify_client_id.set(client_id)
+        await ctx.send("Spotify Client ID set.")
+
+    @playlistset.command(name="spotify_client_secret")
+    async def set_spotify_client_secret(self, ctx, client_secret: str):
+        """Set the Spotify Client Secret."""
+        await self.config.spotify_client_secret.set(client_secret)
+        await ctx.send("Spotify Client Secret set.")
+
+    @playlistset.command(name="spotify_playlist_id")
+    async def set_spotify_playlist_id(self, ctx, playlist_id: str):
+        """Set the Spotify Playlist ID."""
+        await self.config.spotify_playlist_id.set(playlist_id)
+        await ctx.send(f"Spotify Playlist ID set to {playlist_id}")
+
+    @commands.command()
+    @commands.admin_or_permissions(manage_guild=True)
+    async def playlistsettings(self, ctx):
+        """Show the current PlaylistCreator settings."""
+        channel_id = await self.config.channel_id()
+        user_id = await self.config.user_id()
+        spotify_client_id = await self.config.spotify_client_id()
+        spotify_playlist_id = await self.config.spotify_playlist_id()
+
+        settings = (
+            f"Channel ID: {channel_id}\n"
+            f"User ID: {user_id}\n"
+            f"Spotify Client ID: {'Set' if spotify_client_id else 'Not set'}\n"
+            f"Spotify Client Secret: {'Set' if await self.config.spotify_client_secret() else 'Not set'}\n"
+            f"Spotify Playlist ID: {spotify_playlist_id}"
+        )
+        await ctx.send(f"Current settings:\n```\n{settings}\n```")
 
     @commands.command()
     async def seturldm(self, ctx, user_id: int):
