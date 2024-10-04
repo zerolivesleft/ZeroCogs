@@ -264,7 +264,8 @@ class URLGrabber(commands.Cog):
                             headers["Authorization"] = f"Bearer {self.spotify_token}"
                             async with session.post(f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks", headers=headers, json=data) as retry_resp:
                                 if retry_resp.status != 201:
-                                    self.logger.error(f"Failed to add tracks to playlist after token refresh. Status: {retry_resp.status}")
+                                    error_text = await retry_resp.text()
+                                    self.logger.error(f"Failed to add tracks to playlist after token refresh. Status: {retry_resp.status}, Response: {error_text}")
                                     return False
                                 else:
                                     self.logger.info(f"Successfully added {len(tracks_to_add)} tracks to playlist after token refresh")
@@ -309,6 +310,30 @@ class URLGrabber(commands.Cog):
         await self.config.last_message_id.set(None)
         self.logger.info("Last message ID reset to None")
         await ctx.send("Last processed message ID has been reset. The next URL grab will start from the beginning of the channel history.")
+
+    @commands.command()
+    async def check_spotify_token(self, ctx):
+        """Check the current Spotify token and its scopes."""
+        if not self.spotify_token:
+            self.spotify_token = await self.get_spotify_token()
+        if not self.spotify_token:
+            await ctx.send("Failed to get Spotify token.")
+            return
+
+        headers = {
+            "Authorization": f"Bearer {self.spotify_token}",
+            "Content-Type": "application/json"
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.spotify.com/v1/me", headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    scopes = data.get("scopes", [])
+                    await ctx.send(f"Spotify token is valid. Scopes: {', '.join(scopes)}")
+                else:
+                    error_text = await resp.text()
+                    await ctx.send(f"Failed to check Spotify token. Status: {resp.status}, Response: {error_text}")
 
 async def setup(bot):
     await bot.add_cog(URLGrabber(bot))
