@@ -187,6 +187,7 @@ class URLGrabber(commands.Cog):
         client_id = await self.config.spotify_client_id()
         client_secret = await self.config.spotify_client_secret()
         if not client_id or not client_secret:
+            self.logger.error("Spotify client ID or client secret not set")
             return None
 
         auth = b64encode(f"{client_id}:{client_secret}".encode()).decode()
@@ -200,7 +201,11 @@ class URLGrabber(commands.Cog):
             async with session.post("https://accounts.spotify.com/api/token", headers=headers, data=data) as resp:
                 if resp.status == 200:
                     json_data = await resp.json()
+                    self.logger.info("Successfully obtained Spotify token")
                     return json_data["access_token"]
+                else:
+                    error_text = await resp.text()
+                    self.logger.error(f"Failed to get Spotify token. Status: {resp.status}, Response: {error_text}")
         return None
 
     @playlistset.command(name="clear_added_tracks")
