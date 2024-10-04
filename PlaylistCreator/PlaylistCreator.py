@@ -337,6 +337,8 @@ class URLGrabber(commands.Cog):
             self.logger.error("Genius API key is not set")
             return None
 
+        self.logger.info(f"Using Genius API key starting with: {genius_api_key[:5]}...")
+
         base_url = "https://api.genius.com"
         headers = {"Authorization": f"Bearer {genius_api_key}"}
         search_url = f"{base_url}/search"
