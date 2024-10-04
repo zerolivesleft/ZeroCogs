@@ -320,18 +320,12 @@ class URLGrabber(commands.Cog):
                     return False
 
     async def add_tracks_to_playlist(self, track_ids):
+        self.logger.info(f"Attempting to add {len(track_ids)} tracks to playlist")
         if not self.spotify_token:
             success = await self.refresh_spotify_token()
             if not success:
                 self.logger.error("Failed to refresh Spotify token")
                 return False
-
-        self.logger.info(f"Attempting to add {len(track_ids)} tracks to playlist")
-        if not self.spotify_token:
-            self.spotify_token = await self.get_spotify_token()
-        if not self.spotify_token:
-            self.logger.error("Failed to get Spotify token")
-            return False
 
         playlist_id = await self.config.spotify_playlist_id()
         if not playlist_id:
@@ -362,25 +356,24 @@ class URLGrabber(commands.Cog):
         tracks_to_add = [track_id for track_id in track_ids if track_id not in current_track_ids and track_id not in added_tracks]
         self.logger.info(f"Tracks to add: {len(tracks_to_add)}")
 
-        # Add new tracks
-        if tracks_to_add:
-            data = {"uris": [f"spotify:track:{track_id}" for track_id in tracks_to_add]}
+        # Add new tracks in chunks
+        chunk_size = 100
+        for i in range(0, len(tracks_to_add), chunk_size):
+            chunk = tracks_to_add[i:i + chunk_size]
+            data = {"uris": [f"spotify:track:{track_id}" for track_id in chunk]}
+            
             async with aiohttp.ClientSession() as session:
                 async with session.post(f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks", headers=headers, json=data) as resp:
                     if resp.status == 401:
                         self.logger.warning("Spotify token expired, attempting to refresh")
-                        new_token = await self.get_spotify_token()
-                        if new_token:
-                            self.spotify_token = new_token
+                        success = await self.refresh_spotify_token()
+                        if success:
                             headers["Authorization"] = f"Bearer {self.spotify_token}"
                             async with session.post(f"https://api.spotify.com/v1/playlists/{playlist_id}/tracks", headers=headers, json=data) as retry_resp:
                                 if retry_resp.status != 201:
                                     error_text = await retry_resp.text()
                                     self.logger.error(f"Failed to add tracks to playlist after token refresh. Status: {retry_resp.status}, Response: {error_text}")
                                     return False
-                                else:
-                                    self.logger.info(f"Successfully added {len(tracks_to_add)} tracks to playlist after token refresh")
-                                    added_tracks.extend(tracks_to_add)
                         else:
                             self.logger.error("Failed to refresh Spotify token")
                             return False
@@ -389,8 +382,8 @@ class URLGrabber(commands.Cog):
                         self.logger.error(f"Failed to add tracks to playlist. Status: {resp.status}, Response: {error_text}")
                         return False
                     else:
-                        self.logger.info(f"Successfully added {len(tracks_to_add)} tracks to playlist")
-                        added_tracks.extend(tracks_to_add)
+                        self.logger.info(f"Successfully added {len(chunk)} tracks to playlist")
+                        added_tracks.extend(chunk)
 
         # Update the list of added tracks in the config
         await self.config.added_tracks.set(added_tracks)
