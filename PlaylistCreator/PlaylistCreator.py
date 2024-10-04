@@ -9,6 +9,8 @@ import discord
 import asyncio
 from aiohttp import web
 import secrets
+import base64
+import hashlib
 
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
@@ -202,49 +204,55 @@ class URLGrabber(commands.Cog):
             await ctx.send("Spotify client ID is not set. Please set it first.")
             return
 
+        code_verifier = secrets.token_urlsafe(64)
+        code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).decode().rstrip('=')
+
         state = secrets.token_urlsafe(16)
         scope = "playlist-modify-public playlist-modify-private"
-        redirect_uri = "http://localhost:8888/callback"
 
-        auth_url = f"https://accounts.spotify.com/authorize?response_type=code&client_id={client_id}&scope={scope}&redirect_uri={redirect_uri}&state={state}"
+        auth_url = (
+            f"https://accounts.spotify.com/authorize"
+            f"?client_id={client_id}"
+            f"&response_type=code"
+            f"&redirect_uri=https://example.com/callback"
+            f"&scope={scope}"
+            f"&state={state}"
+            f"&code_challenge_method=S256"
+            f"&code_challenge={code_challenge}"
+        )
 
-        await ctx.send(f"Please click this link to authorize the application: {auth_url}")
-        await ctx.send("After authorizing, the browser will try to redirect to a local server. You can close the browser tab after seeing the success message.")
+        await ctx.send(f"Please open this URL in your browser: {auth_url}")
+        await ctx.send("After authorizing, you will be redirected to a non-existent page. Copy the entire URL of that page and paste it here.")
 
-        app = web.Application()
-        app.add_routes([web.get('/callback', self.handle_callback)])
+        def check(m):
+            return m.author == ctx.author and m.channel == ctx.channel
 
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, 'localhost', 8888)
-        await site.start()
+        try:
+            msg = await self.bot.wait_for('message', check=check, timeout=300.0)
+        except asyncio.TimeoutError:
+            await ctx.send("Authentication timed out. Please try again.")
+            return
 
-        while not self.auth_code:
-            await asyncio.sleep(1)
+        auth_response = msg.content
+        code = auth_response.split("code=")[1].split("&")[0]
 
-        await runner.cleanup()
-
-        await self.get_spotify_token(self.auth_code)
+        await self.get_spotify_token(code, code_verifier)
         await ctx.send("Spotify authentication complete!")
 
-    async def handle_callback(self, request):
-        self.auth_code = request.query.get('code')
-        return web.Response(text="Authentication successful! You can close this window now.")
-
-    async def get_spotify_token(self, code):
+    async def get_spotify_token(self, code, code_verifier):
         client_id = await self.config.spotify_client_id()
         client_secret = await self.config.spotify_client_secret()
-        redirect_uri = "http://localhost:8888/callback"
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 "https://accounts.spotify.com/api/token",
                 data={
-                    "grant_type": "authorization_code",
-                    "code": code,
-                    "redirect_uri": redirect_uri,
                     "client_id": client_id,
                     "client_secret": client_secret,
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": "https://example.com/callback",
+                    "code_verifier": code_verifier,
                 }
             ) as resp:
                 if resp.status == 200:
