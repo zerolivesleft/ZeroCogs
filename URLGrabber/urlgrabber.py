@@ -27,8 +27,22 @@ class URLGrabber(commands.Cog):
         self.user_id = user_id
         await ctx.send(f"URL recipient set to user with ID {user_id}")
 
+    @commands.command()
+    async def graburl(self, ctx):
+        """Manually trigger URL grabbing process."""
+        if not self.channel_id or not self.user_id:
+            await ctx.send("Please set both the channel and user ID first.")
+            return
+
+        await ctx.send("Manually triggering URL grab...")
+        await self.perform_url_check()
+        await ctx.send("URL grab complete.")
+
     @tasks.loop(minutes=5.0)
     async def url_check(self):
+        await self.perform_url_check()
+
+    async def perform_url_check(self):
         if not self.channel_id or not self.user_id:
             return
 
