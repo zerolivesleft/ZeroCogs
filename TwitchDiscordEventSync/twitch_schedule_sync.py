@@ -133,55 +133,68 @@ class TwitchScheduleSync(commands.Cog):
         if "data" not in schedule or "segments" not in schedule["data"]:
             self.logger.info("No segments found in the schedule")
             return
+        
+        # Find the next upcoming event
+        now = datetime.now(timezone.utc)
+        next_segment = None
         for segment in schedule["data"]["segments"]:
-            self.logger.info(f"Processing segment: {segment}")
-            self.logger.info(f"Category data: {segment.get('category', {})}")
-            
             start_time = datetime.fromisoformat(segment["start_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
-            
-            if "end_time" in segment and segment["end_time"]:
-                end_time = datetime.fromisoformat(segment["end_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
-            else:
-                end_time = start_time + timedelta(hours=4)
-            
-            event_name = f"Twitch Stream: {segment['title']}"
-            description = segment["category"]["name"]
+            if start_time > now:
+                next_segment = segment
+                break
+        
+        if not next_segment:
+            self.logger.info("No upcoming events found in the schedule")
+            return
+        
+        self.logger.info(f"Processing next segment: {next_segment}")
+        self.logger.info(f"Category data: {next_segment.get('category', {})}")
+        
+        start_time = datetime.fromisoformat(next_segment["start_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
+        
+        if "end_time" in next_segment and next_segment["end_time"]:
+            end_time = datetime.fromisoformat(next_segment["end_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
+        else:
+            end_time = start_time + timedelta(hours=4)
+        
+        event_name = f"Twitch Stream: {next_segment['title']}"
+        description = next_segment["category"]["name"]
 
-            image_url = self.get_event_image_url(segment)
-            self.logger.info(f"Image URL for event: {image_url}")
-            image = await self.fetch_image(image_url)
-            
-            if image:
-                self.logger.info("Image fetched successfully")
-            else:
-                self.logger.warning("Failed to fetch image")
+        image_url = self.get_event_image_url(next_segment)
+        self.logger.info(f"Image URL for event: {image_url}")
+        image = await self.fetch_image(image_url)
+        
+        if image:
+            self.logger.info("Image fetched successfully")
+        else:
+            self.logger.warning("Failed to fetch image")
 
-            # Check if event already exists
-            existing_event = discord.utils.get(await guild.fetch_scheduled_events(), name=event_name)
-            try:
-                if existing_event:
-                    await existing_event.edit(
-                        name=event_name,
-                        description=description,
-                        start_time=start_time,
-                        end_time=end_time,
-                        image=image.fp.read() if image else None
-                    )
-                    self.logger.info(f"Updated existing event: {event_name}")
-                else:
-                    await guild.create_scheduled_event(
-                        name=event_name,
-                        description=description,
-                        start_time=start_time,
-                        end_time=end_time,
-                        privacy_level=discord.PrivacyLevel.guild_only,
-                        entity_type=discord.EntityType.external,
-                        location=f"https://twitch.tv/{self.twitch_username}",
-                        image=image.fp.read() if image else None
-                    )
-                    self.logger.info(f"Created new event: {event_name}")
-            except discord.HTTPException as e:
-                self.logger.error(f"Failed to create/update event: {str(e)}")
+        # Check if event already exists
+        existing_event = discord.utils.get(await guild.fetch_scheduled_events(), name=event_name)
+        try:
+            if existing_event:
+                await existing_event.edit(
+                    name=event_name,
+                    description=description,
+                    start_time=start_time,
+                    end_time=end_time,
+                    image=image.fp.read() if image else None
+                )
+                self.logger.info(f"Updated existing event: {event_name}")
+            else:
+                await guild.create_scheduled_event(
+                    name=event_name,
+                    description=description,
+                    start_time=start_time,
+                    end_time=end_time,
+                    privacy_level=discord.PrivacyLevel.guild_only,
+                    entity_type=discord.EntityType.external,
+                    location=f"https://twitch.tv/{self.twitch_username}",
+                    image=image.fp.read() if image else None
+                )
+                self.logger.info(f"Created new event: {event_name}")
+        except discord.HTTPException as e:
+            self.logger.error(f"Failed to create/update event: {str(e)}")
 
     async def fetch_image(self, url):
         if not url:
