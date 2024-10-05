@@ -148,19 +148,22 @@ class TwitchScheduleSync(commands.Cog):
             return
         
         self.logger.info(f"Processing next segment: {next_segment}")
-        self.logger.info(f"Category data: {next_segment.get('category', {})}")
         
-        start_time = datetime.fromisoformat(next_segment["start_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
+        # Process the next segment
+        await self.process_segment(guild, next_segment)
+
+    async def process_segment(self, guild, segment):
+        start_time = datetime.fromisoformat(segment["start_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
         
-        if "end_time" in next_segment and next_segment["end_time"]:
-            end_time = datetime.fromisoformat(next_segment["end_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
+        if "end_time" in segment and segment["end_time"]:
+            end_time = datetime.fromisoformat(segment["end_time"].rstrip('Z')).replace(tzinfo=timezone.utc)
         else:
             end_time = start_time + timedelta(hours=4)
         
-        event_name = f"Twitch Stream: {next_segment['title']}"
-        description = next_segment["category"]["name"]
+        event_name = f"Twitch Stream: {segment['title']}"
+        description = segment["category"]["name"]
 
-        image_url = self.get_event_image_url(next_segment)
+        image_url = self.get_event_image_url(segment)
         self.logger.info(f"Image URL for event: {image_url}")
         image = await self.fetch_image(image_url)
         
