@@ -13,6 +13,7 @@ import base64
 import hashlib
 from urllib.parse import urlparse, parse_qs, quote
 import lyricsgenius
+from datetime import datetime, timedelta
 
 # Add this list at the top of your file or in a separate configuration
 OFFENSIVE_WORDS = ["fag", "nigger", "retard", "gay"]  # Add your list of offensive words here
@@ -36,6 +37,8 @@ class URLGrabber(commands.Cog):
         self.url_pattern = re.compile(r'https://open\.spotify\.com/track/([a-zA-Z0-9]+)')
         self.url_check.start()
         self.spotify_token = None
+        self.spotify_token_expiry = None
+        self.token_refresh_task = self.bot.loop.create_task(self.auto_refresh_token())
         self.logger = logging.getLogger("red.PlaylistCreator")
         self.logger.info("PlaylistCreator cog initialized")
         self.auth_code = None
@@ -43,6 +46,8 @@ class URLGrabber(commands.Cog):
 
     def cog_unload(self):
         self.url_check.cancel()
+        if self.token_refresh_task:
+            self.token_refresh_task.cancel()
 
     @commands.group()
     @commands.admin()
@@ -309,6 +314,7 @@ class URLGrabber(commands.Cog):
                 if resp.status == 200:
                     data = await resp.json()
                     self.spotify_token = data["access_token"]
+                    self.spotify_token_expiry = datetime.now() + timedelta(seconds=data["expires_in"])
                     await self.config.spotify_refresh_token.set(data["refresh_token"])
                     self.logger.info("Successfully obtained Spotify token")
                     return True
@@ -339,6 +345,7 @@ class URLGrabber(commands.Cog):
                 if resp.status == 200:
                     data = await resp.json()
                     self.spotify_token = data["access_token"]
+                    self.spotify_token_expiry = datetime.now() + timedelta(seconds=data["expires_in"])
                     if "refresh_token" in data:
                         await self.config.spotify_refresh_token.set(data["refresh_token"])
                     return True
@@ -380,6 +387,9 @@ class URLGrabber(commands.Cog):
         return False
 
     async def add_tracks_to_playlist(self, track_ids):
+        if not await self.ensure_spotify_token():
+            return False
+
         self.logger.info(f"Attempting to add {len(track_ids)} tracks to playlist")
         if not self.spotify_token:
             success = await self.refresh_spotify_token()
@@ -546,6 +556,20 @@ class URLGrabber(commands.Cog):
         await ctx.send(f"Spotify Client ID: {'Set' if client_id else 'Not set'}\n"
                        f"Spotify Client Secret: {'Set' if client_secret else 'Not set'}\n"
                        f"Spotify Playlist ID: {playlist_id if playlist_id else 'Not set'}")
+
+    async def auto_refresh_token(self):
+        while True:
+            if self.spotify_token_expiry and self.spotify_token_expiry - datetime.now() < timedelta(minutes=5):
+                await self.refresh_spotify_token()
+            await asyncio.sleep(60)  # Check every minute
+
+    async def ensure_spotify_token(self):
+        if not self.spotify_token or (self.spotify_token_expiry and datetime.now() > self.spotify_token_expiry):
+            success = await self.refresh_spotify_token()
+            if not success:
+                self.logger.error("Failed to refresh Spotify token")
+                return False
+        return True
 
 async def setup(bot):
     await bot.add_cog(URLGrabber(bot))
