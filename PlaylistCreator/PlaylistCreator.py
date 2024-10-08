@@ -78,9 +78,11 @@ class PlaylistCreator(commands.Cog):
             self.token_refresh_task.cancel()
 
     @commands.hybrid_group()
+    @app_commands.guild_only()
     async def playlist(self, ctx):
         """Playlist creator commands"""
-        pass
+        if ctx.invoked_subcommand is None:
+            await ctx.send("Please specify a subcommand.")
 
     @playlist.command(name="set_channel")
     @commands.admin_or_permissions(administrator=True)
@@ -524,7 +526,7 @@ class PlaylistCreator(commands.Cog):
                 return False
         return True
 
-    @commands.hybrid_command()
+    @commands.command()
     async def playlist_test(self, ctx):
         """A test command for the PlaylistCreator cog."""
         await ctx.send("PlaylistCreator cog is working!")
