@@ -11,7 +11,7 @@ from aiohttp import web
 import secrets
 import base64
 import hashlib
-from urllib.parse import urlparse, parse_qs, quote
+from urllib.parse import urlparse, parse_qs, quote, urlencode
 import lyricsgenius
 from datetime import datetime, timedelta
 from discord import ui
@@ -34,6 +34,14 @@ class APICredentialsModal(ui.Modal, title='API Credentials'):
         await cog.config.genius_api_key.set(self.genius_api_key.value)
         cog.genius = lyricsgenius.Genius(self.genius_api_key.value)
         await interaction.followup.send("API credentials set successfully!", ephemeral=True)
+
+class SpotifyAuthModal(ui.Modal, title='Spotify Authorization'):
+    auth_url = ui.TextInput(label='Authorization URL', style=discord.TextStyle.paragraph, placeholder='Paste the entire URL here after authorizing')
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        self.auth_response = self.auth_url.value
+        self.stop()
 
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
@@ -245,7 +253,7 @@ class URLGrabber(commands.Cog):
 
     @commands.command()
     @commands.admin()
-    async def spotify_auth(self, ctx):
+    async def auth(self, ctx):
         """Start the Spotify authentication process."""
         client_id = await self.config.spotify_client_id()
         if not client_id:
@@ -256,50 +264,49 @@ class URLGrabber(commands.Cog):
         code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).decode().rstrip('=')
 
         state = secrets.token_urlsafe(16)
-        scope = quote("playlist-modify-public playlist-modify-private")
-        redirect_uri = quote("http://localhost:8888/callback")
+        scope = "playlist-modify-public playlist-modify-private"
+        redirect_uri = "https://example.com/callback"  # This should be set in your Spotify Developer Dashboard
 
-        auth_url = (
-            f"https://accounts.spotify.com/authorize"
-            f"?client_id={client_id}"
-            f"&response_type=code"
-            f"&redirect_uri={redirect_uri}"
-            f"&scope={scope}"
-            f"&state={state}"
-            f"&code_challenge_method=S256"
-            f"&code_challenge={code_challenge}"
-        )
+        params = {
+            "client_id": client_id,
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "scope": scope,
+            "state": state,
+            "code_challenge_method": "S256",
+            "code_challenge": code_challenge,
+        }
 
-        await ctx.send(f"Please open this URL in your browser: {auth_url}")
-        await ctx.send("After authorizing, you will be redirected to a page that might not load. "
-                       "Copy the URL from your browser's address bar and paste it here. "
-                       "It should start with 'http://localhost:8888/callback?code=...'")
+        auth_url = f"https://accounts.spotify.com/authorize?{urlencode(params)}"
 
-        while True:
-            def check(m):
-                return m.author == ctx.author and m.channel == ctx.channel
+        await ctx.send(f"Please click this link to authorize the application: {auth_url}\n"
+                       f"After authorizing, you will be redirected. Click the button below to submit the URL.")
 
-            try:
-                msg = await self.bot.wait_for('message', check=check, timeout=300.0)
-            except asyncio.TimeoutError:
-                await ctx.send("Authentication timed out. Please try again.")
-                return
+        view = ui.View()
+        view.add_item(ui.Button(label="Submit Authorization URL", style=discord.ButtonStyle.green, custom_id="submit_auth"))
 
-            auth_response = msg.content
-            parsed_url = urlparse(auth_response)
-            query_params = parse_qs(parsed_url.query)
+        await ctx.send("Click here when ready:", view=view)
+
+        def check(interaction):
+            return interaction.data["custom_id"] == "submit_auth" and interaction.user == ctx.author
+
+        try:
+            interaction = await self.bot.wait_for('interaction', timeout=300.0, check=check)
+            modal = SpotifyAuthModal()
+            await interaction.response.send_modal(modal)
+            await modal.wait()
             
-            if 'code' in query_params:
-                code = query_params['code'][0]
-                break
-            else:
-                await ctx.send("Could not find the authorization code in the URL. "
-                               "Please make sure you're copying the URL from the page that might not load. "
-                               "Try again or type 'cancel' to stop.")
-                
-                if auth_response.lower() == 'cancel':
-                    await ctx.send("Authentication cancelled.")
-                    return
+            auth_response = modal.auth_response
+
+        except asyncio.TimeoutError:
+            await ctx.send("You took too long to submit the URL. Please try again.")
+            return
+
+        code = self.extract_code_from_url(auth_response)
+        
+        if not code:
+            await ctx.send("Could not find the authorization code in the URL. Please try again.")
+            return
 
         success = await self.get_spotify_token(code, code_verifier)
         if success:
@@ -307,10 +314,16 @@ class URLGrabber(commands.Cog):
         else:
             await ctx.send("Failed to authenticate with Spotify. Please try again.")
 
+    def extract_code_from_url(self, url):
+        """Extract the authorization code from the callback URL."""
+        parsed_url = urlparse(url)
+        query_params = parse_qs(parsed_url.query)
+        return query_params.get('code', [None])[0]
+
     async def get_spotify_token(self, code, code_verifier):
         client_id = await self.config.spotify_client_id()
         client_secret = await self.config.spotify_client_secret()
-        redirect_uri = "http://localhost:8888/callback"
+        redirect_uri = "https://example.com/callback"
 
         self.logger.info(f"Attempting to exchange code for token. Code: {code[:10]}...")
 
