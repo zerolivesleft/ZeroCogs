@@ -16,6 +16,7 @@ import lyricsgenius
 from datetime import datetime, timedelta
 from redbot.core import app_commands
 from redbot.core.bot import Red
+from discord import ui
 
 # Add this list at the top of your file or in a separate configuration
 OFFENSIVE_WORDS = ["fag", "nigger", "retard", "gay"]  # Add your list of offensive words here
@@ -45,6 +46,19 @@ class SpotifyAuthModal(discord.ui.Modal, title="Enter Spotify Auth Code"):
             await interaction.followup.send("Spotify authentication complete!", ephemeral=True)
         else:
             await interaction.followup.send("Failed to authenticate with Spotify. Please try again.", ephemeral=True)
+
+class SpotifyCredentialsModal(discord.ui.Modal, title="Enter Spotify Credentials"):
+    client_id = discord.ui.TextInput(label="Client ID", placeholder="Enter your Spotify Client ID")
+    client_secret = discord.ui.TextInput(label="Client Secret", placeholder="Enter your Spotify Client Secret", style=discord.TextStyle.password)
+
+    def __init__(self, cog):
+        super().__init__()
+        self.cog = cog
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await self.cog.config.spotify_client_id.set(self.client_id.value)
+        await self.cog.config.spotify_client_secret.set(self.client_secret.value)
+        await interaction.response.send_message("Spotify credentials set.", ephemeral=True)
 
 class PlaylistCreator(commands.Cog):
     def __init__(self, bot: Red):
@@ -102,13 +116,10 @@ class PlaylistCreator(commands.Cog):
 
     @playlist.command(name="set_spotify_credentials")
     @commands.admin_or_permissions(administrator=True)
-    @app_commands.describe(client_id="Spotify client ID", client_secret="Spotify client secret")
-    async def set_spotify_credentials(self, ctx, client_id: str, client_secret: str):
+    async def set_spotify_credentials(self, ctx):
         """Set Spotify API credentials."""
-        await ctx.defer(ephemeral=True)
-        await self.config.spotify_client_id.set(client_id)
-        await self.config.spotify_client_secret.set(client_secret)
-        await ctx.followup.send("Spotify credentials set.", ephemeral=True)
+        modal = SpotifyCredentialsModal(self)
+        await ctx.send_modal(modal)
 
     @playlist.command(name="set_spotify_playlist")
     @commands.admin_or_permissions(administrator=True)
