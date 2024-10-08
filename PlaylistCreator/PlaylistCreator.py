@@ -48,8 +48,8 @@ class SpotifyAuthModal(discord.ui.Modal, title="Enter Spotify Auth Code"):
             await interaction.followup.send("Failed to authenticate with Spotify. Please try again.", ephemeral=True)
 
 class SpotifyCredentialsModal(discord.ui.Modal, title="Enter Spotify Credentials"):
-    client_id = discord.ui.TextInput(label="Client ID", placeholder="Enter your Spotify Client ID")
-    client_secret = discord.ui.TextInput(label="Client Secret", placeholder="Enter your Spotify Client Secret", style=discord.TextStyle.password)
+    client_id = ui.TextInput(label="Client ID", placeholder="Enter your Spotify Client ID", style=discord.TextStyle.short)
+    client_secret = ui.TextInput(label="Client Secret", placeholder="Enter your Spotify Client Secret", style=discord.TextStyle.short)
 
     def __init__(self, cog):
         super().__init__()
