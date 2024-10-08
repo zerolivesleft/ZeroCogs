@@ -77,50 +77,58 @@ class PlaylistCreator(commands.Cog):
         if self.token_refresh_task:
             self.token_refresh_task.cancel()
 
-    playlist_group = app_commands.Group(name="playlist", description="Playlist creator commands")
+    @commands.hybrid_group()
+    async def playlist(self, ctx):
+        """Playlist creator commands"""
+        pass
 
-    @playlist_group.command(name="set_channel")
+    @playlist.command(name="set_channel")
+    @commands.admin_or_permissions(administrator=True)
     @app_commands.describe(channel="The channel to monitor for Spotify links")
-    async def set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def set_channel(self, ctx, channel: discord.TextChannel):
         """Set the channel to monitor for Spotify links."""
         await self.config.channel_id.set(channel.id)
-        await interaction.response.send_message(f"Channel set to {channel.mention}")
+        await ctx.send(f"Channel set to {channel.mention}")
 
-    @playlist_group.command(name="set_user")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def set_user(self, interaction: discord.Interaction, user: discord.User):
+    @playlist.command(name="set_user")
+    @commands.admin_or_permissions(administrator=True)
+    @app_commands.describe(user="The user for Spotify authentication")
+    async def set_user(self, ctx, user: discord.User):
         """Set the user ID for Spotify authentication."""
         await self.config.user_id.set(user.id)
-        await interaction.response.send_message(f"User set to {user.mention}")
+        await ctx.send(f"User set to {user.mention}")
 
-    @playlist_group.command(name="set_spotify_credentials")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def set_spotify_credentials(self, interaction: discord.Interaction, client_id: str, client_secret: str):
+    @playlist.command(name="set_spotify_credentials")
+    @commands.admin_or_permissions(administrator=True)
+    @app_commands.describe(client_id="Spotify client ID", client_secret="Spotify client secret")
+    async def set_spotify_credentials(self, ctx, client_id: str, client_secret: str):
         """Set Spotify API credentials."""
-        await interaction.response.defer(ephemeral=True)
+        await ctx.defer(ephemeral=True)
         await self.config.spotify_client_id.set(client_id)
         await self.config.spotify_client_secret.set(client_secret)
-        await interaction.followup.send("Spotify credentials set.", ephemeral=True)
+        await ctx.followup.send("Spotify credentials set.", ephemeral=True)
 
-    @playlist_group.command(name="set_spotify_playlist")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def set_spotify_playlist(self, interaction: discord.Interaction, playlist_id: str):
+    @playlist.command(name="set_spotify_playlist")
+    @commands.admin_or_permissions(administrator=True)
+    @app_commands.describe(playlist_id="Spotify playlist ID")
+    async def set_spotify_playlist(self, ctx, playlist_id: str):
         """Set Spotify playlist ID."""
         await self.config.spotify_playlist_id.set(playlist_id)
-        await interaction.response.send_message(f"Spotify playlist ID set to {playlist_id}")
+        await ctx.send(f"Spotify playlist ID set to {playlist_id}")
 
-    @playlist_group.command(name="set_genius_api_key")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def set_genius_api_key(self, interaction: discord.Interaction, api_key: str):
+    @playlist.command(name="set_genius_api_key")
+    @commands.admin_or_permissions(administrator=True)
+    @app_commands.describe(api_key="Genius API Key")
+    async def set_genius_api_key(self, ctx, api_key: str):
         """Set the Genius API Key."""
-        await interaction.response.defer(ephemeral=True)
+        await ctx.defer(ephemeral=True)
         await self.config.genius_api_key.set(api_key)
         self.genius = lyricsgenius.Genius(api_key)
-        await interaction.followup.send("Genius API Key set.", ephemeral=True)
+        await ctx.followup.send("Genius API Key set.", ephemeral=True)
 
-    @playlist_group.command(name="settings")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def playlist_settings(self, interaction: discord.Interaction):
+    @playlist.command(name="settings")
+    @commands.admin_or_permissions(administrator=True)
+    async def playlist_settings(self, ctx):
         """Show the current PlaylistCreator settings."""
         channel_id = await self.config.channel_id()
         user_id = await self.config.user_id()
@@ -136,15 +144,15 @@ class PlaylistCreator(commands.Cog):
             f"Spotify Playlist ID: {spotify_playlist_id}\n"
             f"Genius API Key: {'Set' if genius_api_key else 'Not set'}\n"
         )
-        await interaction.response.send_message(f"Current settings:\n```\n{settings}\n```")
+        await ctx.send(f"Current settings:\n```\n{settings}\n```")
 
-    @playlist_group.command(name="auth")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def spotify_auth(self, interaction: discord.Interaction):
+    @playlist.command(name="auth")
+    @commands.admin_or_permissions(administrator=True)
+    async def spotify_auth(self, ctx):
         """Start the Spotify authentication process."""
         client_id = await self.config.spotify_client_id()
         if not client_id:
-            await interaction.response.send_message("Spotify client ID is not set. Please set it first.", ephemeral=True)
+            await ctx.send("Spotify client ID is not set. Please set it first.", ephemeral=True)
             return
 
         code_verifier = secrets.token_urlsafe(64)
@@ -166,7 +174,7 @@ class PlaylistCreator(commands.Cog):
         )
 
         view = SpotifyAuthView(self, auth_url)
-        await interaction.response.send_message("Click the button below to authenticate with Spotify:", view=view, ephemeral=True)
+        await ctx.send("Click the button below to authenticate with Spotify:", view=view, ephemeral=True)
 
     @tasks.loop(minutes=5.0)
     async def url_check(self):
@@ -230,12 +238,12 @@ class PlaylistCreator(commands.Cog):
             return match.group(1)
         return None
 
-    @playlist_group.command(name="clear_added_tracks")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def clear_added_tracks(self, interaction: discord.Interaction):
+    @playlist.command(name="clear_added_tracks")
+    @commands.admin_or_permissions(administrator=True)
+    async def clear_added_tracks(self, ctx):
         """Clear the list of tracks that have been added to the playlist."""
         await self.config.added_tracks.set([])
-        await interaction.response.send_message("The list of added tracks has been cleared.")
+        await ctx.send("The list of added tracks has been cleared.")
 
     async def get_spotify_token(self, code, code_verifier):
         client_id = await self.config.spotify_client_id()
@@ -444,36 +452,36 @@ class PlaylistCreator(commands.Cog):
     async def before_url_check(self):
         await self.bot.wait_until_ready()
 
-    @playlist_group.command(name="refresh_spotify_token")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def refresh_spotify_token(self, interaction: discord.Interaction):
+    @playlist.command(name="refresh_spotify_token")
+    @commands.admin_or_permissions(administrator=True)
+    async def refresh_spotify_token(self, ctx):
         """Manually refresh the Spotify access token."""
         old_token = self.spotify_token
         new_token = await self.refresh_spotify_token()
         if new_token:
             self.spotify_token = new_token
-            await interaction.response.send_message("Spotify token refreshed successfully.")
+            await ctx.send("Spotify token refreshed successfully.")
             self.logger.info("Spotify token refreshed manually")
         else:
-            await interaction.response.send_message("Failed to refresh Spotify token. Check your client credentials.")
+            await ctx.send("Failed to refresh Spotify token. Check your client credentials.")
             self.logger.error("Failed to refresh Spotify token manually")
 
-    @playlist_group.command(name="reset_last_message")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def reset_last_message(self, interaction: discord.Interaction):
+    @playlist.command(name="reset_last_message")
+    @commands.admin_or_permissions(administrator=True)
+    async def reset_last_message(self, ctx):
         """Reset the last processed message ID to start checking from the beginning."""
         await self.config.last_message_id.set(None)
         self.logger.info("Last message ID reset to None")
-        await interaction.response.send_message("Last processed message ID has been reset. The next URL grab will start from the beginning of the channel history.")
+        await ctx.send("Last processed message ID has been reset. The next URL grab will start from the beginning of the channel history.")
 
-    @playlist_group.command(name="check_spotify_token")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def check_spotify_token(self, interaction: discord.Interaction):
+    @playlist.command(name="check_spotify_token")
+    @commands.admin_or_permissions(administrator=True)
+    async def check_spotify_token(self, ctx):
         """Check the current Spotify token and its scopes."""
         if not self.spotify_token:
             success = await self.refresh_spotify_token()
             if not success:
-                await interaction.response.send_message("Failed to refresh Spotify token. Please re-authenticate using [p]spotify_auth")
+                await ctx.send("Failed to refresh Spotify token. Please re-authenticate using [p]spotify_auth")
                 return
 
         headers = {
@@ -485,20 +493,20 @@ class PlaylistCreator(commands.Cog):
             async with session.get("https://api.spotify.com/v1/me", headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    await interaction.response.send_message(f"Spotify token is valid. User: {data['display_name']}")
+                    await ctx.send(f"Spotify token is valid. User: {data['display_name']}")
                 else:
                     error_text = await resp.text()
-                    await interaction.response.send_message(f"Failed to check Spotify token. Status: {resp.status}, Response: {error_text}")
+                    await ctx.send(f"Failed to check Spotify token. Status: {resp.status}, Response: {error_text}")
 
-    @playlist_group.command(name="check_spotify_config")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def check_spotify_config(self, interaction: discord.Interaction):
+    @playlist.command(name="check_spotify_config")
+    @commands.admin_or_permissions(administrator=True)
+    async def check_spotify_config(self, ctx):
         """Check the current Spotify configuration."""
         client_id = await self.config.spotify_client_id()
         client_secret = await self.config.spotify_client_secret()
         playlist_id = await self.config.spotify_playlist_id()
 
-        await interaction.response.send_message(f"Spotify Client ID: {'Set' if client_id else 'Not set'}\n"
+        await ctx.send(f"Spotify Client ID: {'Set' if client_id else 'Not set'}\n"
                        f"Spotify Client Secret: {'Set' if client_secret else 'Not set'}\n"
                        f"Spotify Playlist ID: {playlist_id if playlist_id else 'Not set'}")
 
@@ -516,7 +524,7 @@ class PlaylistCreator(commands.Cog):
                 return False
         return True
 
-    @app_commands.command()
-    async def playlist_test(self, interaction: discord.Interaction):
+    @commands.hybrid_command()
+    async def playlist_test(self, ctx):
         """A test command for the PlaylistCreator cog."""
-        await interaction.response.send_message("PlaylistCreator cog is working!")
+        await ctx.send("PlaylistCreator cog is working!")
