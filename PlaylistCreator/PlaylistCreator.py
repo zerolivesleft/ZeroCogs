@@ -515,6 +515,3 @@ class PlaylistCreator(commands.Cog):
                 self.logger.error("Failed to refresh Spotify token")
                 return False
         return True
-
-async def setup(bot: Red):
-    await bot.add_cog(PlaylistCreator(bot))
