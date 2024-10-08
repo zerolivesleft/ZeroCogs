@@ -265,7 +265,7 @@ class URLGrabber(commands.Cog):
 
         state = secrets.token_urlsafe(16)
         scope = "playlist-modify-public playlist-modify-private"
-        redirect_uri = "https://example.com/callback"  # This should be set in your Spotify Developer Dashboard
+        redirect_uri = "http://localhost:8888/callback"  # Updated redirect URI
 
         params = {
             "client_id": client_id,
@@ -280,7 +280,8 @@ class URLGrabber(commands.Cog):
         auth_url = f"https://accounts.spotify.com/authorize?{urlencode(params)}"
 
         await ctx.send(f"Please click this link to authorize the application: {auth_url}\n"
-                       f"After authorizing, you will be redirected. Click the button below to submit the URL.")
+                       f"After authorizing, you will be redirected to a page that may not load. "
+                       f"This is expected. Click the button below to submit the URL from your browser's address bar.")
 
         view = ui.View()
         view.add_item(ui.Button(label="Submit Authorization URL", style=discord.ButtonStyle.green, custom_id="submit_auth"))
@@ -323,7 +324,7 @@ class URLGrabber(commands.Cog):
     async def get_spotify_token(self, code, code_verifier):
         client_id = await self.config.spotify_client_id()
         client_secret = await self.config.spotify_client_secret()
-        redirect_uri = "https://example.com/callback"
+        redirect_uri = "http://localhost:8888/callback"
 
         self.logger.info(f"Attempting to exchange code for token. Code: {code[:10]}...")
 
