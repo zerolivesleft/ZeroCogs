@@ -43,6 +43,11 @@ class SpotifyAuthModal(ui.Modal, title='Spotify Authorization'):
         self.auth_response = self.auth_url.value
         self.stop()
 
+class AuthView(discord.ui.View):
+    def __init__(self, auth_url):
+        super().__init__()
+        self.add_item(discord.ui.Button(label="Authorize Spotify", url=auth_url, style=discord.ButtonStyle.url))
+
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -279,14 +284,14 @@ class URLGrabber(commands.Cog):
 
         auth_url = f"https://accounts.spotify.com/authorize?{urlencode(params)}"
 
-        await ctx.send(f"Please click this link to authorize the application: {auth_url}\n"
-                       f"After authorizing, you will be redirected to a page that may not load. "
-                       f"This is expected. Click the button below to submit the URL from your browser's address bar.")
+        view = AuthView(auth_url)
+        await ctx.send("Click the button below to authorize the application:", view=view)
 
-        view = ui.View()
-        view.add_item(ui.Button(label="Submit Authorization URL", style=discord.ButtonStyle.green, custom_id="submit_auth"))
+        submit_view = ui.View()
+        submit_view.add_item(ui.Button(label="Submit Authorization URL", style=discord.ButtonStyle.green, custom_id="submit_auth"))
 
-        await ctx.send("Click here when ready:", view=view)
+        await ctx.send("After authorizing, you will be redirected to a page that may not load. "
+                       "This is expected. Click the button below to submit the URL from your browser's address bar.", view=submit_view)
 
         def check(interaction):
             return interaction.data["custom_id"] == "submit_auth" and interaction.user == ctx.author
