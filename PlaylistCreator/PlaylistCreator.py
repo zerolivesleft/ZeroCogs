@@ -25,10 +25,7 @@ class SpotifyAuthView(discord.ui.View):
         super().__init__(timeout=300)
         self.cog = cog
         self.auth_url = auth_url
-
-    @discord.ui.button(label="Authenticate", style=discord.ButtonStyle.url, url="placeholder")
-    async def auth_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        button.url = self.auth_url
+        self.add_item(discord.ui.Button(label="Authenticate", style=discord.ButtonStyle.link, url=self.auth_url))
 
     @discord.ui.button(label="Enter Code", style=discord.ButtonStyle.green)
     async def code_button(self, interaction: discord.Interaction, button: discord.ui.Button):
