@@ -1,4 +1,7 @@
 from .PlaylistCreator import PlaylistCreator
 
 async def setup(bot):
-    await bot.add_cog(PlaylistCreator(bot))
+    cog = PlaylistCreator(bot)
+    await bot.add_cog(cog)
+    if hasattr(bot, "tree"):
+        bot.tree.add_command(cog.playlist)
