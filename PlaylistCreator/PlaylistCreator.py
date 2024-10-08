@@ -535,17 +535,13 @@ class URLGrabber(commands.Cog):
 
     @commands.command()
     @commands.admin()
-    async def refresh_spotify_token(self, ctx):
-        """Manually refresh the Spotify access token."""
-        old_token = self.spotify_token
-        new_token = await self.refresh_spotify_token()
-        if new_token:
-            self.spotify_token = new_token
+    async def manual_refresh_token(self, ctx):
+        """Manually refresh the Spotify token."""
+        success = await self.refresh_spotify_token()
+        if success:
             await ctx.send("Spotify token refreshed successfully.")
-            self.logger.info("Spotify token refreshed manually")
         else:
-            await ctx.send("Failed to refresh Spotify token. Check your client credentials.")
-            self.logger.error("Failed to refresh Spotify token manually")
+            await ctx.send("Failed to refresh Spotify token. Please check the logs.")
 
     @commands.command()
     @commands.admin()
