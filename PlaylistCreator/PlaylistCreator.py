@@ -593,9 +593,18 @@ class URLGrabber(commands.Cog):
 
     async def auto_refresh_token(self):
         while True:
-            if self.spotify_token_expiry and self.spotify_token_expiry - datetime.now() < timedelta(minutes=5):
-                await self.refresh_spotify_token()
-            await asyncio.sleep(60)  # Check every minute
+            try:
+                if not self.spotify_token or (self.spotify_token_expiry and datetime.now() > self.spotify_token_expiry - timedelta(minutes=5)):
+                    self.logger.info("Auto-refreshing Spotify token")
+                    success = await self.refresh_spotify_token()
+                    if success:
+                        self.logger.info("Spotify token refreshed successfully")
+                    else:
+                        self.logger.error("Failed to refresh Spotify token")
+                await asyncio.sleep(60)  # Check every minute
+            except Exception as e:
+                self.logger.error(f"Error in auto_refresh_token: {str(e)}")
+                await asyncio.sleep(60)  # Wait a minute before trying again
 
     async def ensure_spotify_token(self):
         if not self.spotify_token or (self.spotify_token_expiry and datetime.now() > self.spotify_token_expiry):
