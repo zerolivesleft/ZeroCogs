@@ -14,7 +14,7 @@ import hashlib
 from urllib.parse import urlparse, parse_qs, quote
 import lyricsgenius
 from datetime import datetime, timedelta
-from discord import app_commands
+from redbot.core import app_commands
 from redbot.core.bot import Red
 
 # Add this list at the top of your file or in a separate configuration
@@ -80,7 +80,7 @@ class PlaylistCreator(commands.Cog):
     playlist_group = app_commands.Group(name="playlist", description="Playlist creator commands")
 
     @playlist_group.command(name="set_channel")
-    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(channel="The channel to monitor for Spotify links")
     async def set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         """Set the channel to monitor for Spotify links."""
         await self.config.channel_id.set(channel.id)
