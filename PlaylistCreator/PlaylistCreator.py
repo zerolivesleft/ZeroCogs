@@ -14,9 +14,26 @@ import hashlib
 from urllib.parse import urlparse, parse_qs, quote
 import lyricsgenius
 from datetime import datetime, timedelta
+from discord import ui
 
 # Add this list at the top of your file or in a separate configuration
 OFFENSIVE_WORDS = ["fag", "nigger", "retard", "gay"]  # Add your list of offensive words here
+
+class APICredentialsModal(ui.Modal, title='API Credentials'):
+    spotify_client_id = ui.TextInput(label='Spotify Client ID', placeholder='Enter your Spotify Client ID')
+    spotify_client_secret = ui.TextInput(label='Spotify Client Secret', placeholder='Enter your Spotify Client Secret', style=discord.TextStyle.short)
+    spotify_playlist_id = ui.TextInput(label='Spotify Playlist ID', placeholder='Enter your Spotify Playlist ID')
+    genius_api_key = ui.TextInput(label='Genius API Key', placeholder='Enter your Genius API Key')
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        cog = interaction.client.get_cog('URLGrabber')
+        await cog.config.spotify_client_id.set(self.spotify_client_id.value)
+        await cog.config.spotify_client_secret.set(self.spotify_client_secret.value)
+        await cog.config.spotify_playlist_id.set(self.spotify_playlist_id.value)
+        await cog.config.genius_api_key.set(self.genius_api_key.value)
+        cog.genius = lyricsgenius.Genius(self.genius_api_key.value)
+        await interaction.followup.send("API credentials set successfully!", ephemeral=True)
 
 class URLGrabber(commands.Cog):
     def __init__(self, bot):
@@ -129,18 +146,16 @@ class URLGrabber(commands.Cog):
 
     @commands.command()
     @commands.admin()
-    async def setspotifycredentials(self, ctx, client_id: str, client_secret: str):
-        """Set Spotify API credentials."""
-        await self.config.spotify_client_id.set(client_id)
-        await self.config.spotify_client_secret.set(client_secret)
-        await ctx.send("Spotify credentials set.")
+    async def setapicredentials(self, ctx):
+        """Set all API credentials using a single modal."""
+        modal = APICredentialsModal()
+        await ctx.send("Please fill out the API credentials form:", view=ui.View().add_item(ui.Button(label="Open Form", style=discord.ButtonStyle.primary, custom_id="open_api_modal")))
 
-    @commands.command()
-    @commands.admin()
-    async def setspotifyplaylist(self, ctx, playlist_id: str):
-        """Set Spotify playlist ID."""
-        await self.config.spotify_playlist_id.set(playlist_id)
-        await ctx.send(f"Spotify playlist ID set to {playlist_id}")
+        def check(interaction):
+            return interaction.data["custom_id"] == "open_api_modal" and interaction.user == ctx.author
+
+        interaction = await self.bot.wait_for("interaction", check=check)
+        await interaction.response.send_modal(modal)
 
     @commands.command()
     @commands.admin()
