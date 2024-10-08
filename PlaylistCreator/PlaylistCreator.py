@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from redbot.core import app_commands
 from redbot.core.bot import Red
 from discord import ui
+from discord import Interaction
 
 # Add this list at the top of your file or in a separate configuration
 OFFENSIVE_WORDS = ["fag", "nigger", "retard", "gay"]  # Add your list of offensive words here
@@ -118,8 +119,12 @@ class PlaylistCreator(commands.Cog):
     @commands.admin_or_permissions(administrator=True)
     async def set_spotify_credentials(self, ctx):
         """Set Spotify API credentials."""
-        modal = SpotifyCredentialsModal(self)
-        await ctx.send_modal(modal)
+        if isinstance(ctx, Interaction):
+            # This is a slash command interaction
+            await ctx.response.send_modal(SpotifyCredentialsModal(self))
+        else:
+            # This is a regular command context
+            await ctx.send("Please use the slash command version of this command to set Spotify credentials.")
 
     @playlist.command(name="set_spotify_playlist")
     @commands.admin_or_permissions(administrator=True)
