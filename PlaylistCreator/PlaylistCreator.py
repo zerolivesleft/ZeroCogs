@@ -515,3 +515,8 @@ class PlaylistCreator(commands.Cog):
                 self.logger.error("Failed to refresh Spotify token")
                 return False
         return True
+
+    @app_commands.command()
+    async def playlist_test(self, interaction: discord.Interaction):
+        """A test command for the PlaylistCreator cog."""
+        await interaction.response.send_message("PlaylistCreator cog is working!")
